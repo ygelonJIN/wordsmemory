@@ -227,7 +227,7 @@ class _TreeCatelogWidgetState extends State<TreeCatelogWidget> {
           child: Padding(
             padding: EdgeInsetsDirectional.fromSTEB(10.0, 0.0, 10.0, 0.0),
             child: Text(
-              '${group.groupName}//',
+              '${group.groupName}',
               style: FlutterFlowTheme.of(context)
                   .displayLarge
                   .override(
@@ -264,7 +264,7 @@ class _TreeCatelogWidgetState extends State<TreeCatelogWidget> {
                   _model.navigateToRoot(root.rootId);
                 },
                 child: Text(
-                  '${root.rootName}//',
+                  '${root.rootName}',
                   style: FlutterFlowTheme.of(context)
                       .displayLarge
                       .override(

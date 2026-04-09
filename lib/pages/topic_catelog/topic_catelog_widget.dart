@@ -25,12 +25,15 @@ class _TopicCatelogWidgetState extends State<TopicCatelogWidget> {
   @override
   void initState() {
     super.initState();
+    print('[TopicCatalog-Widget] initState START');
     _model = createModel(context, () => TopicCatelogModel());
+    print('[TopicCatalog-Widget] initState END, isLoading=${_model.isLoading}');
   }
 
   @override
   void dispose() {
     _model.dispose();
+    print('[TopicCatalog-Widget] disposed');
 
     super.dispose();
   }
@@ -38,7 +41,10 @@ class _TopicCatelogWidgetState extends State<TopicCatelogWidget> {
   @override
   Widget build(BuildContext context) {
     _model.setOnUpdate(
-      onUpdate: () => setState(() {}),
+      onUpdate: () {
+        print('[TopicCatalog-Widget] setOnUpdate callback, isLoading=${_model.isLoading}');
+        setState(() {});
+      },
       updateOnChange: true,
     );
     _model.disposeOnWidgetDisposal = false;
@@ -215,78 +221,45 @@ class _TopicCatelogWidgetState extends State<TopicCatelogWidget> {
     final items = <Widget>[];
     for (final topic in _model.topics) {
       final vocabLabel = topic.topicName;
-      final readingLabel = topic.topicNameEn;
       final articleId = topic.articleIds.isNotEmpty ? topic.articleIds.first : null;
 
       items.add(
-                            Align(
-                              alignment: AlignmentDirectional(0.0, -1.0),
-                              child: Padding(
+        Align(
+          alignment: AlignmentDirectional(-1.0, -1.0),
+          child: Padding(
             padding: EdgeInsetsDirectional.fromSTEB(0.0, 10.0, 0.0, 0.0),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
-                                      child: Text(
-                    vocabLabel,
-                                        style: FlutterFlowTheme.of(context)
-                                            .displayLarge
-                                            .override(
-                                              font: GoogleFonts.notoSans(
-                                                fontWeight: FontWeight.w500,
-                            fontStyle: FlutterFlowTheme.of(context)
-                                                        .displayLarge
-                                                        .fontStyle,
-                                              ),
-                                              fontSize: 20.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                          fontStyle: FlutterFlowTheme.of(context)
-                                                      .displayLarge
-                                                      .fontStyle,
-                          decoration: TextDecoration.underline,
-                                              lineHeight: 2.5,
-                                            ),
-                                      ),
-                                    ),
-                                    Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
-                                      child: InkWell(
-                                        splashColor: Colors.transparent,
-                                        focusColor: Colors.transparent,
-                                        hoverColor: Colors.transparent,
-                                        highlightColor: Colors.transparent,
-                                        onTap: () async {
-                      _model.navigateToReading(topic.topicId, articleId);
-                                        },
-                                        child: Text(
-                      readingLabel,
-                                          style: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .override(
-                                                font: GoogleFonts.notoSans(
-                                                  fontWeight: FontWeight.w500,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                                          .displayLarge
-                                                          .fontStyle,
-                                                ),
-                                                fontSize: 20.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.w500,
-                            fontStyle: FlutterFlowTheme.of(context)
-                                                        .displayLarge
-                                                        .fontStyle,
-                            decoration: TextDecoration.underline,
-                                                lineHeight: 2.5,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+            child: InkWell(
+              splashColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              onTap: () async {
+                _model.navigateToReading(topic.topicId, articleId);
+              },
+              child: Text(
+                vocabLabel,
+                style: FlutterFlowTheme.of(context)
+                    .displayLarge
+                    .override(
+                      font: GoogleFonts.notoSans(
+                        fontWeight: FontWeight.w500,
+                        fontStyle: FlutterFlowTheme.of(context)
+                            .displayLarge
+                            .fontStyle,
+                      ),
+                      fontSize: 20.0,
+                      letterSpacing: 0.0,
+                      fontWeight: FontWeight.w500,
+                      fontStyle: FlutterFlowTheme.of(context)
+                          .displayLarge
+                          .fontStyle,
+                      decoration: TextDecoration.underline,
+                      lineHeight: 2.5,
+                    ),
+              ),
+            ),
+          ),
+        ),
       );
     }
 

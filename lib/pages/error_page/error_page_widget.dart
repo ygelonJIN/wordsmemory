@@ -7,7 +7,14 @@ import 'error_page_model.dart';
 export 'error_page_model.dart';
 
 class ErrorPageWidget extends StatefulWidget {
-  const ErrorPageWidget({super.key});
+  const ErrorPageWidget({
+    super.key,
+    this.errorCode,
+    this.guideText,
+  });
+
+  final String? errorCode;
+  final String? guideText;
 
   static String routeName = 'ErrorPage';
   static String routePath = '/errorPage';
@@ -24,7 +31,10 @@ class _ErrorPageWidgetState extends State<ErrorPageWidget> {
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => ErrorPageModel());
+    _model = createModel(context, () => ErrorPageModel(
+      errorCode: widget.errorCode,
+      guideText: widget.guideText,
+    ));
   }
 
   @override
@@ -83,7 +93,7 @@ class _ErrorPageWidgetState extends State<ErrorPageWidget> {
                     hoverColor: Colors.transparent,
                     highlightColor: Colors.transparent,
                     onTap: () async {
-                      context.safePop();
+                      Navigator.of(context).pop();
                     },
                     child: Text(
                       'back',
@@ -112,7 +122,7 @@ class _ErrorPageWidgetState extends State<ErrorPageWidget> {
               child: Padding(
                 padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
                 child: Text(
-                  '本地数据异常或存储空间不足等。',
+                  _model.errorTitle,
                   textAlign: TextAlign.center,
                   style: FlutterFlowTheme.of(context).bodyMedium.override(
                         font: GoogleFonts.notoSans(
@@ -136,7 +146,7 @@ class _ErrorPageWidgetState extends State<ErrorPageWidget> {
               child: Padding(
                 padding: EdgeInsetsDirectional.fromSTEB(20.0, 80.0, 20.0, 0.0),
                 child: Text(
-                  '可尝试清理浏览器存储、检查网络后重试，或更新应用。',
+                  _model.guideText,
                   textAlign: TextAlign.center,
                   style: FlutterFlowTheme.of(context).bodyMedium.override(
                         font: GoogleFonts.notoSans(

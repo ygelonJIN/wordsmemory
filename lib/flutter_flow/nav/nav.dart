@@ -69,6 +69,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           },
           builder: (context, params) => TopicReadingPage1Widget(
             articleId: params.getParam<String>('articleId', ParamType.String),
+            topicId: params.getParam<String>('topicId', ParamType.String),
           ),
         ),
         FFRoute(
@@ -84,7 +85,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: ResultPageWidget.routeName,
           path: ResultPageWidget.routePath,
-          builder: (context, params) => ResultPageWidget(),
+          builder: (context, params) => ResultPageWidget(
+            fromQuickLearn: params.getParam<bool>('fromQuickLearn', ParamType.bool),
+            fromRandomLearn: params.getParam<bool>('fromRandomLearn', ParamType.bool),
+          ),
         ),
         FFRoute(
           name: LoadingPageWidget.routeName,
@@ -124,7 +128,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: ErrorPageWidget.routeName,
           path: ErrorPageWidget.routePath,
-          builder: (context, params) => ErrorPageWidget(),
+          builder: (context, params) => ErrorPageWidget(
+            errorCode: params.getParam<String>('errorCode', ParamType.String, isList: false),
+            guideText: params.getParam<String>('guideText', ParamType.String, isList: false),
+          ),
         ),
         FFRoute(
           name: QuickLearnPageWidget.routeName,

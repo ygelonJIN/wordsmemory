@@ -31,7 +31,7 @@ class RandomAskPage2Model extends FlutterFlowModel<RandomAskPage2Widget> {
       updatePage(() {
         if (data == null) {
           hasError = true;
-          ctx.pushNamed(ResultPageWidget.routeName);
+          ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true');
         } else {
           cardData = data;
           hasError = false;

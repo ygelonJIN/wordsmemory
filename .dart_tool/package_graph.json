@@ -18,6 +18,7 @@
         "flutter_animate",
         "flutter_cache_manager",
         "flutter_localizations",
+        "flutter_tts",
         "flutter_web_plugins",
         "font_awesome_flutter",
         "from_css_color",
@@ -969,6 +970,14 @@
         "file",
         "path",
         "string_scanner"
+      ]
+    },
+    {
+      "name": "flutter_tts",
+      "version": "4.2.5",
+      "dependencies": [
+        "flutter",
+        "flutter_web_plugins"
       ]
     }
   ],

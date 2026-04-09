@@ -1,6 +1,7 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
+import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'setting_page_model.dart';
@@ -170,16 +171,17 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                           onTap: () async {
                             final result = await _model.importArchive();
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  result != null
-                                      ? '导入成功：${result.imported}条，跳过：${result.skipped}条'
-                                      : '导入已取消',
-                                ),
-                                backgroundColor: result == null ? Colors.orange : null,
-                              ),
-                            );
+                            if (result.result == SettingPageActionResult.success) {
+                              // 成功/部分成功：跳转到 ErrorPage 展示结果（SRS 规范）
+                              final guide = Uri.encodeComponent(
+                                '成功导入 ${result.importedCount ?? 0} 条进度，丢弃 ${result.skippedCount ?? 0} 条失效词汇进度',
+                              );
+                              context.push('${ErrorPageWidget.routePath}?errorCode=IMPORT_UUID_MISMATCH&guideText=$guide');
+                            } else if (result.result == SettingPageActionResult.error) {
+                              final code = result.errorCode ?? 'IMPORT_FORMAT_ERROR';
+                              context.push('${ErrorPageWidget.routePath}?errorCode=$code');
+                            }
+                            // cancelled: 不做操作，静默返回
                           },
                           child: Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
@@ -214,16 +216,14 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
-                            final path = await _model.exportArchive();
+                            final result = await _model.exportArchive();
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  path != null ? '备份成功' : '备份已取消',
-                                ),
-                                backgroundColor: path == null ? Colors.orange : null,
-                              ),
-                            );
+                            if (result.result == SettingPageActionResult.error) {
+                              // 失败：跳转到 ErrorPage 展示错误（SRS 规范）
+                              final code = result.errorCode ?? 'EXPORT_ERROR';
+                              context.push('${ErrorPageWidget.routePath}?errorCode=$code');
+                            }
+                            // success/cancelled: 不做操作，静默返回
                           },
                           child: Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 20.0, 0.0),
@@ -293,123 +293,50 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onTap: () => _model.setCurrentBook('kaoyan2027'),
-                                    child: Text(
-                                      '2027考研',
-                                      textAlign: TextAlign.center,
-                                      style: FlutterFlowTheme.of(context)
-                                          .displayLarge
-                                          .override(
-                                            font: GoogleFonts.notoSans(
-                                              fontWeight: _model.currentBook == 'kaoyan2027'
+                                ..._model.wordBooks.map((book) {
+                                  final isSelected = _model.currentBook == book.bookId;
+                                  return Padding(
+                                    padding: EdgeInsetsDirectional.fromSTEB(
+                                        _model.wordBooks.indexOf(book) == 0 ? 20.0 : 6.0, 0.0,
+                                        book == _model.wordBooks.last ? 20.0 : 0.0, 0.0),
+                                    child: InkWell(
+                                      splashColor: Colors.transparent,
+                                      focusColor: Colors.transparent,
+                                      hoverColor: Colors.transparent,
+                                      highlightColor: Colors.transparent,
+                                      onTap: () => _model.setCurrentBook(book.bookId),
+                                      child: Text(
+                                        book.bookName,
+                                        textAlign: TextAlign.center,
+                                        style: FlutterFlowTheme.of(context)
+                                            .displayLarge
+                                            .override(
+                                              font: GoogleFonts.notoSans(
+                                                fontWeight: isSelected
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w500,
+                                                fontStyle: FlutterFlowTheme.of(context)
+                                                    .displayLarge
+                                                    .fontStyle,
+                                              ),
+                                              color: isSelected
+                                                  ? const Color(0xFF0000FF)
+                                                  : Colors.black,
+                                              fontSize: 20.0,
+                                              letterSpacing: 0.0,
+                                              fontWeight: isSelected
                                                   ? FontWeight.w700
                                                   : FontWeight.w500,
                                               fontStyle: FlutterFlowTheme.of(context)
                                                   .displayLarge
                                                   .fontStyle,
+                                              decoration: TextDecoration.underline,
+                                              lineHeight: 1.5,
                                             ),
-                                            color: _model.currentBook == 'kaoyan2027'
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: _model.currentBook == 'kaoyan2027'
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                            decoration: TextDecoration.underline,
-                                            lineHeight: 1.5,
-                                          ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () => _model.setCurrentBook('cet6'),
-                                  child: Text(
-                                    'CET6',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context)
-                                        .displayLarge
-                                        .override(
-                                          font: GoogleFonts.notoSans(
-                                            fontWeight: _model.currentBook == 'cet6'
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.currentBook == 'cet6'
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.currentBook == 'cet6'
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          fontStyle: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .fontStyle,
-                                          decoration: TextDecoration.underline,
-                                          lineHeight: 1.5,
-                                        ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () => _model.setCurrentBook('cet4'),
-                                  child: Text(
-                                    'CET4',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context)
-                                        .displayLarge
-                                        .override(
-                                          font: GoogleFonts.notoSans(
-                                            fontWeight: _model.currentBook == 'cet4'
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.currentBook == 'cet4'
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.currentBook == 'cet4'
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          fontStyle: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .fontStyle,
-                                          decoration: TextDecoration.underline,
-                                          lineHeight: 1.5,
-                                        ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 20.0, 0.0),
-                                  child: SizedBox(width: 1.0),
-                                ),
+                                  );
+                                }),
                               ],
                             ),
                           ],
@@ -726,7 +653,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                     focusColor: Colors.transparent,
                                     hoverColor: Colors.transparent,
                                     highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowEtymology(true),
+                                    onTap: () => _model.setShowEtymology(!_model.showEtymology),
                                     child: Text(
                                       '词根词缀',
                                       textAlign: TextAlign.center,
@@ -764,7 +691,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
-                                  onTap: () => _model.setShowDefinition(true),
+                                    onTap: () => _model.setShowDefinition(!_model.showDefinition),
                                   child: Text(
                                     '词义',
                                     textAlign: TextAlign.center,
@@ -801,7 +728,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
-                                  onTap: () => _model.setShowExample(true),
+                                    onTap: () => _model.setShowExample(!_model.showExample),
                                   child: Text(
                                     '例句',
                                     textAlign: TextAlign.center,

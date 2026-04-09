@@ -28,6 +28,11 @@ class StudySession {
   /// pending 对应的预览计算结果（仅存在内存，不写 DB）
   CardModel? pendingPreviewCard;
 
+  /// 从语义阅读页点词进入时，记录当前 articleId，用于 Learn 结束后返回
+  String? topicReadingResumeArticleId;
+  /// 从语义阅读页点词进入时，记录当前 topicId
+  String? topicReadingResumeTopicId;
+
   StudySession({
     required this.mode,
     required this.queue,
@@ -35,6 +40,11 @@ class StudySession {
     int? sessionStartTime,
   })  : sessionStartTime = sessionStartTime ?? DateTime.now().millisecondsSinceEpoch,
         learnedCards = [];
+
+  void clearTopicReadingResume() {
+    topicReadingResumeArticleId = null;
+    topicReadingResumeTopicId = null;
+  }
 
   CardModel? get currentCard =>
       currentIndex < queue.length ? queue[currentIndex] : null;
@@ -44,6 +54,11 @@ class StudySession {
   int get progress => currentIndex + 1;
   int get total => queue.length;
   int get remaining => queue.length - currentIndex - 1;
+
+  /// 是否有从语义阅读页返回的能力
+  bool get canResumeTopicReading => topicReadingResumeArticleId != null;
+  String? get resumeArticleId => topicReadingResumeArticleId;
+  String? get resumeTopicId => topicReadingResumeTopicId;
 
   void advance() {
     if (hasNext) currentIndex++;
@@ -81,6 +96,7 @@ class StudySessionManager {
         ? dueCards.sublist(0, limit)
         : dueCards;
     _currentSession = StudySession(mode: StudyMode.review, queue: limited);
+    _currentSession!.clearTopicReadingResume();
     return _currentSession!;
   }
 
@@ -89,6 +105,7 @@ class StudySessionManager {
     final newCards = await queryNewCards(hotDb, limit: limit);
     print('[Study] queryNewCards 完成, 共 ${newCards.length} 张卡');
     _currentSession = StudySession(mode: StudyMode.learn, queue: newCards);
+    _currentSession!.clearTopicReadingResume();
     return _currentSession!;
   }
 
@@ -104,6 +121,26 @@ class StudySessionManager {
       favCards = favCards.sublist(0, limit);
     }
     _currentSession = StudySession(mode: StudyMode.favorite, queue: favCards);
+    return _currentSession!;
+  }
+
+  /// 从语义阅读页点词进入：创建单卡学习会话并携带恢复用 articleId / topicId
+  Future<StudySession> createSingleCardLearnSession(
+    String conceptUuid, {
+    required String resumeArticleId,
+    required String resumeTopicId,
+  }) async {
+    print('[Study] createSingleCardLearnSession conceptUuid=$conceptUuid');
+    final card = await queryCardByUuid(hotDb, conceptUuid);
+    if (card == null) {
+      print('[Study] createSingleCardLearnSession: 卡不存在 conceptUuid=$conceptUuid');
+      _currentSession = StudySession(mode: StudyMode.learn, queue: []);
+    } else {
+      _currentSession = StudySession(mode: StudyMode.learn, queue: [card]);
+      _currentSession!.topicReadingResumeArticleId = resumeArticleId;
+      _currentSession!.topicReadingResumeTopicId = resumeTopicId;
+      print('[Study] createSingleCardLearnSession: 会话已创建，resumeArticleId=$resumeArticleId');
+    }
     return _currentSession!;
   }
 
@@ -228,6 +265,7 @@ class StudySessionManager {
     await setSettingInt(hotDb, 'book_progress_current',
         bookCurrent + session.learnedCards.length);
 
+    session.clearTopicReadingResume();
     _currentSession = null;
 
     return stats;
@@ -516,50 +554,97 @@ class QuickScreenManager {
 
   QuickScreenManager({required this.hotDb, required this.romDb});
 
-  List<QuickScreenItem> _items = [];
+  List<QuickScreenItem> _allItems = [];  // 全量待筛选词（仅在内存）
+  List<QuickScreenItem> _items = [];     // 当前页数据
+  int _currentPage = 0;
+  final int _pageSize = 20;
   int _knownCount = 0;
 
   List<QuickScreenItem> get items => _items;
   int get knownCount => _knownCount;
   int get total => _items.length;
   int get remaining => _items.length - _knownCount;
+  int get currentPage => _currentPage;
+  bool get hasNextPage => (_currentPage + 1) * _pageSize < _allItems.length;
+  bool get hasPrevPage => _currentPage > 0;
 
   Future<void> initSession({int? limit}) async {
-    final newCards = await queryNewCards(hotDb, limit: limit);
+    var cards = await queryNewCards(hotDb, limit: limit);
+    // 如果没有新卡，回退到加载所有卡（确保快速筛选始终有数据可用）
+    if (cards.isEmpty) {
+      cards = await queryAllCards(hotDb, limit: limit);
+    }
     final knownUuids = await queryKnownUuids(hotDb);
 
-    _items = [];
+    _allItems = [];
     _knownCount = 0;
 
-    for (final card in newCards) {
+    for (final card in cards) {
       final note = await queryNoteByUuid(romDb, card.conceptUuid);
       if (note == null) continue;
 
       final isKnown = knownUuids.contains(card.conceptUuid);
-      _items.add(QuickScreenItem(
+      _allItems.add(QuickScreenItem(
         conceptUuid: card.conceptUuid,
         spelling: note.spelling,
         status: isKnown
             ? QuickScreenItemStatus.known
             : QuickScreenItemStatus.unmarked,
       ));
-      if (isKnown) _knownCount++;
     }
+
+    _currentPage = 0;
+    _knownCount = _allItems.where((i) => i.status == QuickScreenItemStatus.known).length;
+    _loadCurrentPage();
   }
 
-  Future<void> markAsKnown(int index) async {
+  void _loadCurrentPage() {
+    final start = _currentPage * _pageSize;
+    _items = _allItems.skip(start).take(_pageSize).toList();
+    _knownCount = _allItems.where((i) => i.status == QuickScreenItemStatus.known).length;
+  }
+
+  /// 切换认识/默认状态（两个状态来回切换）
+  Future<void> toggleKnown(int index) async {
     if (index < 0 || index >= _items.length) return;
-    if (_items[index].status == QuickScreenItemStatus.known) return;
 
-    _items[index].status = QuickScreenItemStatus.known;
-    _knownCount++;
+    final currentStatus = _items[index].status;
+    final willBeKnown = currentStatus == QuickScreenItemStatus.unmarked;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await markWordAsKnown(hotDb, _items[index].conceptUuid, now);
+    _items[index] = QuickScreenItem(
+      conceptUuid: _items[index].conceptUuid,
+      spelling: _items[index].spelling,
+      status: willBeKnown
+          ? QuickScreenItemStatus.known
+          : QuickScreenItemStatus.unmarked,
+    );
+
+    // 全量数据中同步更新（用于翻页后状态保持）
+    final globalIndex = _currentPage * _pageSize + index;
+    if (globalIndex < _allItems.length) {
+      _allItems[globalIndex] = _items[index];
+    }
+
+    _knownCount = _allItems.where((i) => i.status == QuickScreenItemStatus.known).length;
+    await toggleWordScreenStatus(hotDb, _items[index].conceptUuid, willBeKnown);
   }
 
-  String get progressText => '已筛选:$_knownCount/$total';
-  bool get isAllDone => _knownCount >= _items.length;
+  /// 加载下一页
+  Future<void> nextPage() async {
+    if (!hasNextPage) return;
+    _currentPage++;
+    _loadCurrentPage();
+  }
+
+  /// 加载上一页
+  Future<void> prevPage() async {
+    if (!hasPrevPage) return;
+    _currentPage--;
+    _loadCurrentPage();
+  }
+
+  String get progressText => '本次已标注: $_knownCount 个';
+  bool get isAllDone => _knownCount >= _allItems.length;
 }
 
 // ============================================================================
@@ -626,7 +711,10 @@ class TreeWordDisplayModel {
   });
 
   String get renderString =>
-      '$compoundForm=$compoundMeaning=$finalMeaning';
+      '$spelling=$compoundForm=$compoundMeaning=$finalMeaning';
+
+  /// 仅展示词根组合部分（不含单词）
+  String get renderDetail => '$compoundForm=$compoundMeaning=$finalMeaning';
 }
 
 // ============================================================================
@@ -648,13 +736,18 @@ class TopicReadingManager {
   }
 
   Future<ArticleDisplayModel?> getArticleDisplay(String articleId) async {
+    print('[TopicReadingManager] getArticleDisplay articleId=$articleId');
     final articles = await romDb.query(
       kTableArticle,
       where: 'Article_ID = ?',
       whereArgs: [articleId],
       limit: 1,
     );
-    if (articles.isEmpty) return null;
+    print('[TopicReadingManager] Article 查询结果: ${articles.length} 条');
+    if (articles.isEmpty) {
+      print('[TopicReadingManager] 未找到 Article=$articleId');
+      return null;
+    }
 
     final article = ArticleModel.fromMap(articles.first);
     final topic = await romDb.query(
@@ -663,12 +756,17 @@ class TopicReadingManager {
       whereArgs: [article.topicId],
       limit: 1,
     );
-    if (topic.isEmpty) return null;
+    print('[TopicReadingManager] Topic 查询 article.topicId=${article.topicId}, 结果: ${topic.length} 条');
+    if (topic.isEmpty) {
+      print('[TopicReadingManager] 未找到 Topic=${article.topicId}');
+      return null;
+    }
 
     final topicModel = TopicModel.fromMap(topic.first);
     final readCount = await _countTopicReadUuids(article.contentJson);
     final segments = _parseContentJson(article.contentJson);
 
+    print('[TopicReadingManager] 返回 ArticleDisplayModel articleId=${article.articleId}');
     return ArticleDisplayModel(
       articleId: article.articleId,
       topicName: topicModel.topicName,
@@ -697,11 +795,52 @@ class TopicReadingManager {
   List<Map<String, dynamic>> _parseContentJson(String json) {
     try {
       final decoded = _jsonDecode(json);
-      if (decoded is! List) return [];
-      return decoded.map((e) {
-        if (e is Map) return Map<String, dynamic>.from(e);
-        return <String, dynamic>{};
-      }).toList();
+      if (decoded is List) {
+        return decoded.map((e) {
+          if (e is Map) return Map<String, dynamic>.from(e);
+          return <String, dynamic>{};
+        }).toList();
+      }
+      if (decoded is Map) {
+        // 显式 segments 格式（用于语义阅读词级高亮）
+        final segments = decoded['segments'];
+        if (segments is List && segments.isNotEmpty) {
+          final result = <Map<String, dynamic>>[];
+          for (final seg in segments) {
+            if (seg is Map) {
+              result.add({
+                't': seg['t'] as String? ?? '',
+                'c': seg['c'] as int? ?? 0,
+                'u': seg['u'] as String? ?? '',
+              });
+            }
+          }
+          return result;
+        }
+        // dict 格式（如 art_suf_01）：提取 sections 转为 segments
+        final sections = decoded['sections'];
+        if (sections is List) {
+          final result = <Map<String, dynamic>>[];
+          for (final section in sections) {
+            if (section is Map) {
+              final heading = section['heading'] as String? ?? '';
+              final body = section['body'] as String? ?? '';
+              if (heading.isNotEmpty) {
+                result.add({'t': heading, 'c': 0});
+              }
+              if (body.isNotEmpty) {
+                result.add({'t': body, 'c': 0});
+              }
+            }
+          }
+          return result;
+        }
+        final title = decoded['title'] as String?;
+        if (title != null && title.isNotEmpty) {
+          return [{'t': title, 'c': 0}];
+        }
+      }
+      return [];
     } catch (_) {
       return [];
     }
@@ -710,6 +849,62 @@ class TopicReadingManager {
   Future<void> visitWord(String conceptUuid) async {
     await updateCardTopicRead(hotDb, conceptUuid);
   }
+
+  /// 获取指定专题中当前文章的下一篇 ID（用于阅读页 Next 按钮）
+  /// 返回 null 表示当前是最后一篇
+  Future<String?> getNextArticleId(String topicId, String currentArticleId) async {
+    final articles = await queryArticlesByTopic(romDb, topicId);
+    if (articles.isEmpty) return null;
+    for (int i = 0; i < articles.length; i++) {
+      if (articles[i].articleId == currentArticleId && i + 1 < articles.length) {
+        return articles[i + 1].articleId;
+      }
+    }
+    return null;
+  }
+
+  /// 获取指定专题中当前文章的上一篇 ID（用于阅读页 Back 按钮）
+  /// 返回 null 表示当前是第一篇
+  Future<String?> getPreviousArticleId(String topicId, String currentArticleId) async {
+    final articles = await queryArticlesByTopic(romDb, topicId);
+    if (articles.isEmpty) return null;
+    for (int i = 0; i < articles.length; i++) {
+      if (articles[i].articleId == currentArticleId && i > 0) {
+        return articles[i - 1].articleId;
+      }
+    }
+    return null;
+  }
+
+  /// 获取指定专题的所有文章列表及当前文章的索引
+  /// 用于条件显示 Back/Next 按钮
+  Future<TopicArticlesResult?> getTopicArticlesWithIndex(String topicId, String currentArticleId) async {
+    final articles = await queryArticlesByTopic(romDb, topicId);
+    if (articles.isEmpty) return null;
+    for (int i = 0; i < articles.length; i++) {
+      if (articles[i].articleId == currentArticleId) {
+        return TopicArticlesResult(
+          articles: articles,
+          currentIndex: i,
+        );
+      }
+    }
+    return null;
+  }
+}
+
+/// 专题文章列表结果
+class TopicArticlesResult {
+  final List<ArticleModel> articles;
+  final int currentIndex;
+
+  TopicArticlesResult({
+    required this.articles,
+    required this.currentIndex,
+  });
+
+  bool get hasPrevious => currentIndex > 0;
+  bool get hasNext => currentIndex < articles.length - 1;
 }
 
 class ArticleDisplayModel {

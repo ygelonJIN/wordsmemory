@@ -6,9 +6,12 @@ import 'package:demo1red/backend/provider.dart';
 
 class QuickLearnPageModel extends FlutterFlowModel<QuickLearnPageWidget> {
   List<QuickLearnItemData> items = [];
-  String progressText = '已筛选:0/0';
+  String progressText = '本次已标注: 0 个';
   bool isLoading = true;
   bool _disposed = false;
+
+  bool get hasNext => BackendManager.instance.hasNextQuickLearnPage();
+  bool get hasPrev => BackendManager.instance.hasPrevQuickLearnPage();
 
   @override
   void initState(BuildContext context) {
@@ -36,12 +39,29 @@ class QuickLearnPageModel extends FlutterFlowModel<QuickLearnPageWidget> {
     }
   }
 
-  Future<void> markKnown(int index) async {
-    await BackendManager.instance.markQuickLearnKnown(index);
+  void refreshItems() {
     updatePage(() {
       items = BackendManager.instance.getQuickLearnItems();
       progressText = BackendManager.instance.getQuickLearnProgress();
     });
+  }
+
+  /// 切换认识/默认状态（两个状态来回切换）
+  Future<void> toggleKnown(int index) async {
+    await BackendManager.instance.toggleQuickLearnKnown(index);
+    refreshItems();
+  }
+
+  /// 加载下一页
+  Future<void> nextPage() async {
+    await BackendManager.instance.loadNextQuickLearnPage();
+    refreshItems();
+  }
+
+  /// 加载上一页
+  Future<void> prevPage() async {
+    await BackendManager.instance.loadPrevQuickLearnPage();
+    refreshItems();
   }
 
   @override

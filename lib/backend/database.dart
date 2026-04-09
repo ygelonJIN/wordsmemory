@@ -11,9 +11,14 @@ import 'package:sqflite/sqflite.dart';
 // 对应文档：词汇SRS&SDD v2.1 第 4 节
 // ============================================================================
 
-// ROM Data（只读静态数据，随安装包下发）
+// ============================================================================
+// ROM 数据库初始化
+// ============================================================================
+
+/// ROM 数据库文件名（可被外部预生成的 ECDICT 数据库替换）
+/// 优先级：外部文件 > 内置示例数据
 const String kRomDbName = 'wordmemory_rom.db';
-// Hot Data（读写，用户私有目录）
+/// Hot Data（读写，用户私有目录）
 const String kHotDbName = 'wordmemory_hot.db';
 
 // ROM 表名
@@ -155,6 +160,23 @@ CREATE TABLE User_Settings (
 ) STRICT;
 ''';
 
+/// WordBook 表：动态管理词书元数据
+/// 用途：SettingPage 词书选项从数据库加载，替代硬编码
+/// 对应 SRS&SDD v2.1 附录 B：词书系统
+const String kCreateWordBookSql = '''
+CREATE TABLE WordBook (
+    Book_ID TEXT PRIMARY KEY,
+    Book_Name TEXT NOT NULL,
+    Book_Name_EN TEXT NOT NULL,
+    Word_Count INTEGER NOT NULL DEFAULT 0,
+    Tag_List TEXT NOT NULL,
+    Description TEXT NOT NULL,
+    Sort_Order INTEGER NOT NULL DEFAULT 0,
+    Is_Default INTEGER NOT NULL DEFAULT 0
+) STRICT;
+CREATE INDEX idx_wordbook_sort ON WordBook(Sort_Order);
+''';
+
 // ============================================================================
 // ROM 数据库初始化
 // ============================================================================
@@ -162,6 +184,7 @@ CREATE TABLE User_Settings (
 Future<Database> openRomDatabase(String dbDir) async {
   final path = _dbPath(kRomDbName, dbDir);
   print('[DB] openRomDatabase path=$path');
+
   return openDatabase(
     path,
     version: 1,
@@ -174,26 +197,34 @@ Future<Database> openRomDatabase(String dbDir) async {
       await db.execute(kCreateTreeWordSql);
       await db.execute(kCreateTopicSql);
       await db.execute(kCreateArticleSql);
-      await _seedRomData(db);
+      await _seedSemanticReadingData(db);
       print('[DB] ROM onCreate 完成');
     },
     onOpen: (db) async {
       print('[DB] ROM onOpen 开始');
       await _ensureRomDataIntegrity(db);
+      await _ensureSemanticReadingDataSeeded(db);
       print('[DB] ROM onOpen 完成');
     },
   );
 }
 
-/// 确保 ROM 数据完整性。如果 Note 表为空则重新写入数据
+/// 确保 ROM 数据完整性。如果 Note 表为空则重新写入示例数据
+///
+/// 注意：如果需要加载 ECDICT 预生成数据库：
+/// 1. 将 ECDICT 转换工具输出的 wordmemory_rom.db 复制到应用私有目录
+/// 2. 该文件已有数据，不会触发此处补种逻辑
+/// 3. 如果 ROM 文件存在但 Note 表为空，说明是新数据库，也会触发补种
 Future<void> _ensureRomDataIntegrity(Database db) async {
   print('[DB] _ensureRomDataIntegrity 开始');
   final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM Note'));
   print('[DB] _ensureRomDataIntegrity Note数量=$count');
   if (count == null || count == 0) {
-    print('[DB] _ensureRomDataIntegrity Note为空，开始补种...');
+    print('[DB] _ensureRomDataIntegrity Note为空，开始补种示例数据...');
     await _seedRomData(db);
     print('[DB] _ensureRomDataIntegrity 补种完成');
+  } else {
+    print('[DB] _ensureRomDataIntegrity ROM已有 ${count} 条词汇，使用预生成数据或已有数据');
   }
   print('[DB] _ensureRomDataIntegrity 结束');
 }
@@ -206,189 +237,386 @@ Future<void> ensureRomDataIntegrity(Database db) => _ensureRomDataIntegrity(db);
 // ============================================================================
 
 Future<void> _seedRomData(Database db) async {
+  // 先清空旧的结构树和文章数据（保留其他词汇）
+  await db.delete(kTableTreeWord);
+  await db.delete(kTableTreeRoot);
+  await db.delete(kTableArticle);
+  await db.delete(kTableTopic);
+
   // --------------------------------------------------------------------------
-  // Note 数据（20个词汇）
+  // Note 数据（re/trans 词根系列 + 旧有词，共约 70 个）
   // --------------------------------------------------------------------------
   final notes = <Map<String, dynamic>>[
+    // ======================== re- 系列（25个）========================
     {
-      'Concept_UUID': 'note_accede',
-      'Spelling': 'accede',
-      'Phonetic': '/əkˈsiːd/',
-      'Definition': 'v. 同意；答应；加入',
-      'Etymology_JSON': '{"prefix":"ac-=ad-=to","root":"ced=go","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The king refused to accede to the demands.","zh":"国王拒绝答应这些要求。"}',
-      'Content_JSON': '{"spelling":"accede","phonetic":"/əkˈsiːd/","definition":"v. 同意；答应；加入","etymology":"ac-=向+ced-=走→走到一起→同意","example":"The king refused to accede to the demands.","translation":"国王拒绝答应这些要求。"}',
+      'Concept_UUID': 'note_reassure',
+      'Spelling': 'reassure',
+      'Phonetic': '/ˌriːəˈʃɔː/',
+      'Definition': 'v. 使安心；使确信',
+      'Etymology_JSON': '{"prefix":"re-=再/重新","root":"assure=使确信","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Her smile reassured me.","zh":"她的微笑使我安心。"}',
+      'Content_JSON': '{"spelling":"reassure","phonetic":"/ˌriːəˈʃɔː/","definition":"v. 使安心；使确信","etymology":"re-=再+assure=使确信→再次使确信→使安心","example":"Her smile reassured me.","translation":"她的微笑使我安心。"}',
     },
     {
-      'Concept_UUID': 'note_proceed',
-      'Spelling': 'proceed',
-      'Phonetic': '/prəˈsiːd/',
-      'Definition': 'v. 继续进行；前进；着手',
-      'Etymology_JSON': '{"prefix":"pro-=forward","root":"ced=go","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Let us proceed with the plan.","zh":"让我们继续执行计划。"}',
-      'Content_JSON': '{"spelling":"proceed","phonetic":"/prəˈsiːd/","definition":"v. 继续进行；前进；着手","etymology":"pro-=向前+ced-=走→向前走→继续进行","example":"Let us proceed with the plan.","translation":"让我们继续执行计划。"}',
+      'Concept_UUID': 'note_recollect',
+      'Spelling': 'recollect',
+      'Phonetic': '/ˌrekəˈlekt/',
+      'Definition': 'v. 回忆起；想起',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"collect=收集","suffix":""}',
+      'Micro_Context_JSON': '{"en":"I tried to recollect her name.","zh":"我努力回忆她的名字。"}',
+      'Content_JSON': '{"spelling":"recollect","phonetic":"/ˌrekəˈlekt/","definition":"v. 回忆起；想起","etymology":"re-=重新+collect=收集→重新收集→回忆起","example":"I tried to recollect her name.","translation":"我努力回忆她的名字。"}',
     },
     {
-      'Concept_UUID': 'note_concede',
-      'Spelling': 'concede',
-      'Phonetic': '/kənˈsiːd/',
-      'Definition': 'v. 承认；让步；给予',
-      'Etymology_JSON': '{"prefix":"con-=completely","root":"ced=go","suffix":""}',
-      'Micro_Context_JSON': '{"en":"He conceded that he was wrong.","zh":"他承认自己错了。"}',
-      'Content_JSON': '{"spelling":"concede","phonetic":"/kənˈsiːd/","definition":"v. 承认；让步；给予","etymology":"con-=完全+ced-=走→走开→让步","example":"He conceded that he was wrong.","translation":"他承认自己错了。"}',
+      'Concept_UUID': 'note_reconcile',
+      'Spelling': 'reconcile',
+      'Phonetic': '/ˈrekənsaɪl/',
+      'Definition': 'v. 和解；调解；使一致',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"concile=召集/使和好","suffix":""}',
+      'Micro_Context_JSON': '{"en":"They finally reconciled after a long dispute.","zh":"经过长时间的争执，他们终于和解了。"}',
+      'Content_JSON': '{"spelling":"reconcile","phonetic":"/ˈrekənsaɪl/","definition":"v. 和解；调解；使一致","etymology":"re-=重新+concile=召集→重新召集到一起→和解","example":"They finally reconciled after a long dispute.","translation":"经过长时间的争执，他们终于和解了。"}',
     },
     {
-      'Concept_UUID': 'note_exceed',
-      'Spelling': 'exceed',
-      'Phonetic': '/ɪkˈsiːd/',
-      'Definition': 'v. 超过；超越；胜过',
-      'Etymology_JSON': '{"prefix":"ex-=out","root":"ced=go","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The cost exceeded our budget.","zh":"费用超出了我们的预算。"}',
-      'Content_JSON': '{"spelling":"exceed","phonetic":"/ɪkˈsiːd/","definition":"v. 超过；超越；胜过","etymology":"ex-=出+ced-=走→走出→超过","example":"The cost exceeded our budget.","translation":"费用超出了我们的预算。"}',
+      'Concept_UUID': 'note_reproduce',
+      'Spelling': 'reproduce',
+      'Phonetic': '/ˌriːprəˈdjuːs/',
+      'Definition': 'v. 繁殖；复制；再生',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"produce=生产","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The device can reproduce images perfectly.","zh":"这台设备能完美地复制图像。"}',
+      'Content_JSON': '{"spelling":"reproduce","phonetic":"/ˌriːprəˈdjuːs/","definition":"v. 繁殖；复制；再生","etymology":"re-=重新+produce=生产→重新生产→繁殖","example":"The device can reproduce images perfectly.","translation":"这台设备能完美地复制图像。"}',
     },
     {
-      'Concept_UUID': 'note_adapt',
-      'Spelling': 'adapt',
-      'Phonetic': '/əˈdæpt/',
-      'Definition': 'v. 使适应；改编',
-      'Etymology_JSON': '{"prefix":"ad-=to","root":"apt=fit","suffix":""}',
-      'Micro_Context_JSON': '{"en":"We must adapt to the changes.","zh":"我们必须适应这些变化。"}',
-      'Content_JSON': '{"spelling":"adapt","phonetic":"/əˈdæpt/","definition":"v. 使适应；改编","etymology":"ad-=向+apt=适合→使适合→适应","example":"We must adapt to the changes.","translation":"我们必须适应这些变化。"}',
+      'Concept_UUID': 'note_request',
+      'Spelling': 'request',
+      'Phonetic': '/rɪˈkwest/',
+      'Definition': 'v. 请求；要求 n. 请求',
+      'Etymology_JSON': '{"prefix":"re-=一再","root":"quest=寻求","suffix":""}',
+      'Micro_Context_JSON': '{"en":"I made a request for more information.","zh":"我请求更多信息。"}',
+      'Content_JSON': '{"spelling":"request","phonetic":"/rɪˈkwest/","definition":"v. 请求；要求 n. 请求","etymology":"re-=一再+quest=寻求→一再寻求→请求","example":"I made a request for more information.","translation":"我请求更多信息。"}',
     },
     {
-      'Concept_UUID': 'note_adopt',
-      'Spelling': 'adopt',
-      'Phonetic': '/əˈdɒpt/',
-      'Definition': 'v. 采纳；收养；采用',
-      'Etymology_JSON': '{"prefix":"ad-=to","root":"opt=choose","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The committee adopted the new policy.","zh":"委员会采纳了新政策。"}',
-      'Content_JSON': '{"spelling":"adopt","phonetic":"/əˈdɒpt/","definition":"v. 采纳；收养；采用","etymology":"ad-=向+opt=选择→选择→采纳","example":"The committee adopted the new policy.","translation":"委员会采纳了新政策。"}',
+      'Concept_UUID': 'note_recommend',
+      'Spelling': 'recommend',
+      'Phonetic': '/ˌrekəˈmend/',
+      'Definition': 'v. 推荐；建议',
+      'Etymology_JSON': '{"prefix":"re-=再次/一再","root":"commend=称赞/托付","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Can you recommend a good restaurant?","zh":"你能推荐一家好餐厅吗？"}',
+      'Content_JSON': '{"spelling":"recommend","phonetic":"/ˌrekəˈmend/","definition":"v. 推荐；建议","etymology":"re-=再次+commend=称赞→再次称赞→推荐","example":"Can you recommend a good restaurant?","translation":"你能推荐一家好餐厅吗？"}',
     },
     {
-      'Concept_UUID': 'note_combine',
-      'Spelling': 'combine',
-      'Phonetic': '/kəmˈbaɪn/',
-      'Definition': 'v. 联合；结合；合并',
-      'Etymology_JSON': '{"prefix":"com-=together","root":"bin=two","suffix":""}',
-      'Micro_Context_JSON': '{"en":"We combined our efforts to finish the project.","zh":"我们合并力量完成了这个项目。"}',
-      'Content_JSON': '{"spelling":"combine","phonetic":"/kəmˈbaɪn/","definition":"v. 联合；结合；合并","etymology":"com-=共同+bin=二→合二为一→结合","example":"We combined our efforts to finish the project.","translation":"我们合并力量完成了这个项目。"}',
+      'Concept_UUID': 'note_recompense',
+      'Spelling': 'recompense',
+      'Phonetic': '/ˈrekəmpens/',
+      'Definition': 'v. 赔偿；补偿 n. 赔偿金',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"compense=称量/补偿","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The company offered to recompense the victims.","zh":"公司提出赔偿受害者。"}',
+      'Content_JSON': '{"spelling":"recompense","phonetic":"/ˈrekəmpens/","definition":"v. 赔偿；补偿 n. 赔偿金","etymology":"re-=重新+compense=称量→重新称量→重新补偿→赔偿","example":"The company offered to recompense the victims.","translation":"公司提出赔偿受害者。"}',
     },
     {
-      'Concept_UUID': 'note_compete',
-      'Spelling': 'compete',
-      'Phonetic': '/kəmˈpiːt/',
-      'Definition': 'v. 竞争；比赛；对抗',
-      'Etymology_JSON': '{"prefix":"com-=together","root":"pet=seek","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Several teams will compete for the prize.","zh":"几个团队将竞争这个奖项。"}',
-      'Content_JSON': '{"spelling":"compete","phonetic":"/kəmˈpiːt/","definition":"v. 竞争；比赛；对抗","etymology":"com-=共同+pet=追求→共同追求→竞争","example":"Several teams will compete for the prize.","translation":"几个团队将竞争这个奖项。"}',
+      'Concept_UUID': 'note_restrain',
+      'Spelling': 'restrain',
+      'Phonetic': '/rɪˈstreɪn/',
+      'Definition': 'v. 抑制；阻止；约束',
+      'Etymology_JSON': '{"prefix":"re-=向后","root":"strain=拉紧","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The police restrained the crowd.","zh":"警察阻止了人群。"}',
+      'Content_JSON': '{"spelling":"restrain","phonetic":"/rɪˈstreɪn/","definition":"v. 抑制；阻止；约束","etymology":"re-=向后+strain=拉紧→往回拉紧→抑制","example":"The police restrained the crowd.","translation":"警察阻止了人群。"}',
     },
     {
-      'Concept_UUID': 'note_describe',
-      'Spelling': 'describe',
-      'Phonetic': '/dɪˈskraɪb/',
-      'Definition': 'v. 描述；形容；描绘',
-      'Etymology_JSON': '{"prefix":"de-=down","root":"scrib=write","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Can you describe what happened?","zh":"你能描述一下发生了什么吗？"}',
-      'Content_JSON': '{"spelling":"describe","phonetic":"/dɪˈskraɪb/","definition":"v. 描述；形容；描绘","etymology":"de-=向下+scrib=写→写下→描述","example":"Can you describe what happened?","translation":"你能描述一下发生了什么吗？"}',
+      'Concept_UUID': 'note_retail',
+      'Spelling': 'retail',
+      'Phonetic': '/ˈriːteɪl/',
+      'Definition': 'v. 零售 n. 零售 adj. 零售的',
+      'Etymology_JSON': '{"prefix":"re-=再次","root":"tail=切割","suffix":""}',
+      'Micro_Context_JSON': '{"en":"They retail products at a discount.","zh":"他们以折扣价零售商品。"}',
+      'Content_JSON': '{"spelling":"retail","phonetic":"/ˈriːteɪl/","definition":"v. 零售 n. 零售 adj. 零售的","etymology":"re-=再次+tail=切割→再次切割→分割销售→零售","example":"They retail products at a discount.","translation":"他们以折扣价零售商品。"}',
     },
     {
-      'Concept_UUID': 'note_decide',
-      'Spelling': 'decide',
-      'Phonetic': '/dɪˈsaɪd/',
-      'Definition': 'v. 决定；判决；解决',
-      'Etymology_JSON': '{"prefix":"de-=completely","root":"cid=cut","suffix":""}',
-      'Micro_Context_JSON': '{"en":"We need to decide by tomorrow.","zh":"我们需要在明天之前决定。"}',
-      'Content_JSON': '{"spelling":"decide","phonetic":"/dɪˈsaɪd/","definition":"v. 决定；判决；解决","etymology":"de-=完全+cid=切→切掉→决定","example":"We need to decide by tomorrow.","translation":"我们需要在明天之前决定。"}',
+      'Concept_UUID': 'note_revolve',
+      'Spelling': 'revolve',
+      'Phonetic': '/rɪˈvɒlv/',
+      'Definition': 'v. 旋转；环绕；反复思考',
+      'Etymology_JSON': '{"prefix":"re-=一再","root":"volve=滚动/转动","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The earth revolves around the sun.","zh":"地球绕太阳旋转。"}',
+      'Content_JSON': '{"spelling":"revolve","phonetic":"/rɪˈvɒlv/","definition":"v. 旋转；环绕；反复思考","etymology":"re-=一再+volve=滚动→一再滚动→旋转","example":"The earth revolves around the sun.","translation":"地球绕太阳旋转。"}',
     },
     {
-      'Concept_UUID': 'note_react',
-      'Spelling': 'react',
-      'Phonetic': '/riˈækt/',
-      'Definition': 'v. 反应；起反应；回应',
-      'Etymology_JSON': '{"prefix":"re-=back","root":"act=do","suffix":""}',
-      'Micro_Context_JSON': '{"en":"How did she react to the news?","zh":"她对这个消息有什么反应？"}',
-      'Content_JSON': '{"spelling":"react","phonetic":"/riˈækt/","definition":"v. 反应；起反应；回应","etymology":"re-=回+act=做→回做→反应","example":"How did she react to the news?","translation":"她对这个消息有什么反应？"}',
+      'Concept_UUID': 'note_refresh',
+      'Spelling': 'refresh',
+      'Phonetic': '/rɪˈfreʃ/',
+      'Definition': 'v. 使恢复；使振作；刷新',
+      'Etymology_JSON': '{"prefix":"re-=再次","root":"fresh=新鲜的","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Press F5 to refresh the page.","zh":"按F5刷新页面。"}',
+      'Content_JSON': '{"spelling":"refresh","phonetic":"/rɪˈfreʃ/","definition":"v. 使恢复；使振作；刷新","etymology":"re-=再次+fresh=新鲜的→再次变新鲜→刷新","example":"Press F5 to refresh the page.","translation":"按F5刷新页面。"}',
     },
     {
-      'Concept_UUID': 'note_return',
-      'Spelling': 'return',
-      'Phonetic': '/rɪˈtɜːn/',
-      'Definition': 'v. 返回；回来；归还',
-      'Etymology_JSON': '{"prefix":"re-=back","root":"turn=turn","suffix":""}',
-      'Micro_Context_JSON': '{"en":"I will return the book tomorrow.","zh":"我明天会还这本书。"}',
-      'Content_JSON': '{"spelling":"return","phonetic":"/rɪˈtɜːn/","definition":"v. 返回；回来；归还","etymology":"re-=回+turn=转→转回→返回","example":"I will return the book tomorrow.","translation":"我明天会还这本书。"}',
+      'Concept_UUID': 'note_remark',
+      'Spelling': 'remark',
+      'Phonetic': '/rɪˈmɑːk/',
+      'Definition': 'v. 评论；谈论 n. 评论；注意',
+      'Etymology_JSON': '{"prefix":"re-=一再","root":"mark=标记","suffix":""}',
+      'Micro_Context_JSON': '{"en":"She remarked on his excellent performance.","zh":"她评论了他的出色表现。"}',
+      'Content_JSON': '{"spelling":"remark","phonetic":"/rɪˈmɑːk/","definition":"v. 评论；谈论 n. 评论；注意","etymology":"re-=一再+mark=标记→一再标记→加以标注→评论","example":"She remarked on his excellent performance.","translation":"她评论了他的出色表现。"}',
     },
     {
-      'Concept_UUID': 'note_review',
-      'Spelling': 'review',
-      'Phonetic': '/rɪˈvjuː/',
-      'Definition': 'v. 复习；回顾；审核',
-      'Etymology_JSON': '{"prefix":"re-=again","root":"view=see","suffix":""}',
-      'Micro_Context_JSON': '{"en":"I need to review my notes before the exam.","zh":"考试前我需要复习笔记。"}',
-      'Content_JSON': '{"spelling":"review","phonetic":"/rɪˈvjuː/","definition":"v. 复习；回顾；审核","etymology":"re-=再+view=看→再看→复习","example":"I need to review my notes before the exam.","translation":"考试前我需要复习笔记。"}',
+      'Concept_UUID': 'note_remarkable',
+      'Spelling': 'remarkable',
+      'Phonetic': '/rɪˈmɑːkəbl/',
+      'Definition': 'adj. 卓越的；非凡的；值得注意的',
+      'Etymology_JSON': '{"prefix":"re-=一再","root":"mark=标记","suffix":"-able=值得...的"}',
+      'Micro_Context_JSON': '{"en":"This is a remarkable achievement.","zh":"这是一项非凡的成就。"}',
+      'Content_JSON': '{"spelling":"remarkable","phonetic":"/rɪˈmɑːkəbl/","definition":"adj. 卓越的；非凡的；值得注意的","etymology":"re-=一再+mark=标记+-able=值得...的→值得一再标记的→卓越的","example":"This is a remarkable achievement.","translation":"这是一项非凡的成就。"}',
+    },
+    {
+      'Concept_UUID': 'note_recite',
+      'Spelling': 'recite',
+      'Phonetic': '/rɪˈsaɪt/',
+      'Definition': 'v. 背诵；朗读；列举',
+      'Etymology_JSON': '{"prefix":"re-=再次","root":"cite=唤起/引用","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The student recited the poem fluently.","zh":"学生流利地背诵了这首诗。"}',
+      'Content_JSON': '{"spelling":"recite","phonetic":"/rɪˈsaɪt/","definition":"v. 背诵；朗读；列举","etymology":"re-=再次+cite=唤起→再次唤起记忆→背诵","example":"The student recited the poem fluently.","translation":"学生流利地背诵了这首诗。"}',
+    },
+    {
+      'Concept_UUID': 'note_renaissance',
+      'Spelling': 'renaissance',
+      'Phonetic': '/rɪˈneɪsəns/',
+      'Definition': 'n. 文艺复兴；复兴；复活',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"naissance=诞生","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The Renaissance transformed European culture.","zh":"文艺复兴改变了欧洲文化。"}',
+      'Content_JSON': '{"spelling":"renaissance","phonetic":"/rɪˈneɪsəns/","definition":"n. 文艺复兴；复兴；复活","etymology":"re-=重新+naissance=诞生→重新诞生→文艺复兴","example":"The Renaissance transformed European culture.","translation":"文艺复兴改变了欧洲文化。"}',
+    },
+    {
+      'Concept_UUID': 'note_recount',
+      'Spelling': 'recount',
+      'Phonetic': '/rɪˈkaʊnt/',
+      'Definition': 'v. 重新计算；叙述；讲述',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"count=计算","suffix":""}',
+      'Micro_Context_JSON': '{"en":"She recounted her adventures in detail.","zh":"她详细叙述了她的冒险经历。"}',
+      'Content_JSON': '{"spelling":"recount","phonetic":"/rɪˈkaʊnt/","definition":"v. 重新计算；叙述；讲述","etymology":"re-=重新+count=计算→重新计算→叙述","example":"She recounted her adventures in detail.","translation":"她详细叙述了她的冒险经历。"}',
+    },
+    {
+      'Concept_UUID': 'note_renovation',
+      'Spelling': 'renovation',
+      'Phonetic': '/ˌrenəˈveɪʃn/',
+      'Definition': 'n. 翻修；革新；装修',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"nov=新","suffix":"-ation=行为/结果"}',
+      'Micro_Context_JSON': '{"en":"The house needs renovation.","zh":"这房子需要翻修。"}',
+      'Content_JSON': '{"spelling":"renovation","phonetic":"/ˌrenəˈveɪʃn/","definition":"n. 翻修；革新；装修","etymology":"re-=重新+nov=新+-ation=行为→重新造新→翻修","example":"The house needs renovation.","translation":"这房子需要翻修。"}',
+    },
+    {
+      'Concept_UUID': 'note_reinforce',
+      'Spelling': 'reinforce',
+      'Phonetic': '/ˌriːɪnˈfɔːs/',
+      'Definition': 'v. 加强；增援；巩固',
+      'Etymology_JSON': '{"prefix":"re-=再次","root":"inforce=enforce=加强","suffix":""}',
+      'Micro_Context_JSON': '{"en":"We need to reinforce the walls.","zh":"我们需要加固墙壁。"}',
+      'Content_JSON': '{"spelling":"reinforce","phonetic":"/ˌriːɪnˈfɔːs/","definition":"v. 加强；增援；巩固","etymology":"re-=再次+inforce=加强→再次加强→强化","example":"We need to reinforce the walls.","translation":"我们需要加固墙壁。"}',
+    },
+    {
+      'Concept_UUID': 'note_renew',
+      'Spelling': 'renew',
+      'Phonetic': '/rɪˈnjuː/',
+      'Definition': 'v. 更新；续签；使恢复',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"new=新的","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Please renew your subscription online.","zh":"请在网上续订您的订阅。"}',
+      'Content_JSON': '{"spelling":"renew","phonetic":"/rɪˈnjuː/","definition":"v. 更新；续签；使恢复","etymology":"re-=重新+new=新的→重新变新→更新","example":"Please renew your subscription online.","translation":"请在网上续订您的订阅。"}',
+    },
+    {
+      'Concept_UUID': 'note_require',
+      'Spelling': 'require',
+      'Phonetic': '/rɪˈkwaɪə/',
+      'Definition': 'v. 需要；要求；命令',
+      'Etymology_JSON': '{"prefix":"re-=一再","root":"quire=寻求/询问","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The job requires experience.","zh":"这份工作需要经验。"}',
+      'Content_JSON': '{"spelling":"require","phonetic":"/rɪˈkwaɪə/","definition":"v. 需要；要求；命令","etymology":"re-=一再+quire=寻求→一再寻求→需要","example":"The job requires experience.","translation":"这份工作需要经验。"}',
+    },
+    {
+      'Concept_UUID': 'note_replace',
+      'Spelling': 'replace',
+      'Phonetic': '/rɪˈpleɪs/',
+      'Definition': 'v. 替换；取代；把...放回原处',
+      'Etymology_JSON': '{"prefix":"re-=重新","root":"place=放置","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Can you replace the broken light bulb?","zh":"你能换掉烧坏的灯泡吗？"}',
+      'Content_JSON': '{"spelling":"replace","phonetic":"/rɪˈpleɪs/","definition":"v. 替换；取代；把...放回原处","etymology":"re-=重新+place=放置→重新放置→替换","example":"Can you replace the broken light bulb?","translation":"你能换掉烧坏的灯泡吗？"}',
+    },
+    {
+      'Concept_UUID': 'note_register',
+      'Spelling': 'register',
+      'Phonetic': '/ˈredʒɪstə/',
+      'Definition': 'v. 登记；注册；记录 n. 登记表',
+      'Etymology_JSON': '{"prefix":"re-=带回","root":"gister=带来/记录","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Please register for the course online.","zh":"请在网上注册这门课程。"}',
+      'Content_JSON': '{"spelling":"register","phonetic":"/ˈredʒɪstə/","definition":"v. 登记；注册；记录 n. 登记表","etymology":"re-=带回+gister=带来→带回来记录→登记","example":"Please register for the course online.","translation":"请在网上注册这门课程。"}',
+    },
+    {
+      'Concept_UUID': 'note_resemble',
+      'Spelling': 'resemble',
+      'Phonetic': '/rɪˈzembl/',
+      'Definition': 'v. 类似；像；相似',
+      'Etymology_JSON': '{"prefix":"re-=再次","root":"semble=相似","suffix":""}',
+      'Micro_Context_JSON': '{"en":"She resembles her mother closely.","zh":"她很像她的母亲。"}',
+      'Content_JSON': '{"spelling":"resemble","phonetic":"/rɪˈzembl/","definition":"v. 类似；像；相似","etymology":"re-=再次+semble=相似→再次相似→类似","example":"She resembles her mother closely.","translation":"她很像她的母亲。"}',
+    },
+    {
+      'Concept_UUID': 'note_resemblance',
+      'Spelling': 'resemblance',
+      'Phonetic': '/rɪˈzembləns/',
+      'Definition': 'n. 相似；相似之处；相像程度',
+      'Etymology_JSON': '{"prefix":"re-=再次","root":"semblance=相似的样子","suffix":""}',
+      'Micro_Context_JSON': '{"en":"There is a strong resemblance between them.","zh":"他们之间有很强的相似之处。"}',
+      'Content_JSON': '{"spelling":"resemblance","phonetic":"/rɪˈzembləns/","definition":"n. 相似；相似之处；相像程度","etymology":"re-=再次+semblance=相似的样子→再次相似的状态→相似之处","example":"There is a strong resemblance between them.","translation":"他们之间有很强的相似之处。"}',
+    },
+    {
+      'Concept_UUID': 'note_remain',
+      'Spelling': 'remain',
+      'Phonetic': '/rɪˈmeɪn/',
+      'Definition': 'v. 保持；留下；剩余',
+      'Etymology_JSON': '{"prefix":"re-=向后","root":"main=停留（=manere）","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Please remain seated until the bus stops.","zh":"请在公共汽车停下之前保持坐着。"}',
+      'Content_JSON': '{"spelling":"remain","phonetic":"/rɪˈmeɪn/","definition":"v. 保持；留下；剩余","etymology":"re-=向后+main=停留→向后停留→保持","example":"Please remain seated until the bus stops.","translation":"请在公共汽车停下之前保持坐着。"}',
+    },
+    {
+      'Concept_UUID': 'note_restrict',
+      'Spelling': 'restrict',
+      'Phonetic': '/rɪˈstrɪkt/',
+      'Definition': 'v. 限制；约束；限定',
+      'Etymology_JSON': '{"prefix":"re-=往回","root":"strict=拉紧/严格","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Speed is restricted to 60 km/h here.","zh":"这里限速60公里/小时。"}',
+      'Content_JSON': '{"spelling":"restrict","phonetic":"/rɪˈstrɪkt/","definition":"v. 限制；约束；限定","etymology":"re-=往回+strict=拉紧→往回拉紧→限制","example":"Speed is restricted to 60 km/h here.","translation":"这里限速60公里/小时。"}',
+    },
+    // ======================== trans- 系列（15个）========================
+    {
+      'Concept_UUID': 'note_transfer',
+      'Spelling': 'transfer',
+      'Phonetic': '/trænsˈfɜː/',
+      'Definition': 'v. 转移；转学；转让 n. 转移；转让',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"fer=携带/搬运","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Please transfer the files to the server.","zh":"请把文件转移到服务器上。"}',
+      'Content_JSON': '{"spelling":"transfer","phonetic":"/trænsˈfɜː/","definition":"v. 转移；转学；转让 n. 转移；转让","etymology":"trans-=跨越+fer=携带→跨越携带→转移","example":"Please transfer the files to the server.","translation":"请把文件转移到服务器上。"}',
     },
     {
       'Concept_UUID': 'note_translate',
       'Spelling': 'translate',
       'Phonetic': '/trænzˈleɪt/',
       'Definition': 'v. 翻译；转化；解释',
-      'Etymology_JSON': '{"prefix":"trans-=across","root":"lat=carry","suffix":""}',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"late=搬运/携带（lat=携带）","suffix":""}',
       'Micro_Context_JSON': '{"en":"Can you translate this sentence into English?","zh":"你能把这句话翻译成英语吗？"}',
-      'Content_JSON': '{"spelling":"translate","phonetic":"/trænzˈleɪt/","definition":"v. 翻译；转化；解释","etymology":"trans-=跨+lat=带→带过去→翻译","example":"Can you translate this sentence into English?","translation":"你能把这句话翻译成英语吗？"}',
+      'Content_JSON': '{"spelling":"translate","phonetic":"/trænzˈleɪt/","definition":"v. 翻译；转化；解释","etymology":"trans-=跨越+late=搬运→跨越搬运→翻译","example":"Can you translate this sentence into English?","translation":"你能把这句话翻译成英语吗？"}',
+    },
+    {
+      'Concept_UUID': 'note_transmit',
+      'Spelling': 'transmit',
+      'Phonetic': '/trænzˈmɪt/',
+      'Definition': 'v. 传输；发送；传播；传达',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"mit=发送（=mittere）","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The station transmits news around the world.","zh":"电台向全世界发送新闻。"}',
+      'Content_JSON': '{"spelling":"transmit","phonetic":"/trænzˈmɪt/","definition":"v. 传输；发送；传播；传达","etymology":"trans-=跨越+mit=发送→跨越发送→传输","example":"The station transmits news around the world.","translation":"电台向全世界发送新闻。"}',
     },
     {
       'Concept_UUID': 'note_transport',
       'Spelling': 'transport',
       'Phonetic': '/trænzˈpɔːt/',
-      'Definition': 'v. 运输；运送；搬运',
-      'Etymology_JSON': '{"prefix":"trans-=across","root":"port=carry","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The goods were transported by train.","zh":"货物是通过火车运输的。"}',
-      'Content_JSON': '{"spelling":"transport","phonetic":"/trænzˈpɔːt/","definition":"v. 运输；运送；搬运","etymology":"trans-=跨+port=搬运→搬运过去→运输","example":"The goods were transported by train.","translation":"货物是通过火车运输的。"}',
+      'Definition': 'v. 运输；运送 n. 运输；运输工具',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"port=搬运/携带","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Trucks transport goods across the country.","zh":"卡车将货物运往全国各地。"}',
+      'Content_JSON': '{"spelling":"transport","phonetic":"/trænzˈpɔːt/","definition":"v. 运输；运送 n. 运输；运输工具","etymology":"trans-=跨越+port=搬运→跨越搬运→运输","example":"Trucks transport goods across the country.","translation":"卡车将货物运往全国各地。"}',
     },
     {
       'Concept_UUID': 'note_transform',
       'Spelling': 'transform',
       'Phonetic': '/trænzˈfɔːm/',
-      'Definition': 'v. 改变；改造；转变',
-      'Etymology_JSON': '{"prefix":"trans-=across","root":"form=shape","suffix":""}',
+      'Definition': 'v. 改变；改造；使变形',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"form=形状/形态","suffix":""}',
       'Micro_Context_JSON': '{"en":"The city has been transformed over the years.","zh":"这座城市在这些年里发生了巨大的变化。"}',
-      'Content_JSON': '{"spelling":"transform","phonetic":"/trænzˈfɔːm/","definition":"v. 改变；改造；转变","etymology":"trans-=跨+form=形状→改变形状→改造","example":"The city has been transformed over the years.","translation":"这座城市在这些年里发生了巨大的变化。"}',
+      'Content_JSON': '{"spelling":"transform","phonetic":"/trænzˈfɔːm/","definition":"v. 改变；改造；使变形","etymology":"trans-=跨越+form=形状→跨越改变形状→变形","example":"The city has been transformed over the years.","translation":"这座城市在这些年里发生了巨大的变化。"}',
     },
     {
-      'Concept_UUID': 'note_reduce',
-      'Spelling': 'reduce',
-      'Phonetic': '/rɪˈdjuːs/',
-      'Definition': 'v. 减少；降低；缩小',
-      'Etymology_JSON': '{"prefix":"re-=back","root":"duc=lead","suffix":""}',
-      'Micro_Context_JSON': '{"en":"We need to reduce our expenses.","zh":"我们需要减少开支。"}',
-      'Content_JSON': '{"spelling":"reduce","phonetic":"/rɪˈdjuːs/","definition":"v. 减少；降低；缩小","etymology":"re-=回+duc=引导→往回引→减少","example":"We need to reduce our expenses.","translation":"我们需要减少开支。"}',
+      'Concept_UUID': 'note_transparent',
+      'Spelling': 'transparent',
+      'Phonetic': '/trænsˈpærənt/',
+      'Definition': 'adj. 透明的；显然的；易觉察的',
+      'Etymology_JSON': '{"prefix":"trans-=穿透","root":"parent=显现/出现（parere）","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Glass is transparent.","zh":"玻璃是透明的。"}',
+      'Content_JSON': '{"spelling":"transparent","phonetic":"/trænsˈpærənt/","definition":"adj. 透明的；显然的；易觉察的","etymology":"trans-=穿透+parent=显现→穿透显现→透明的","example":"Glass is transparent.","translation":"玻璃是透明的。"}',
     },
     {
-      'Concept_UUID': 'note_produce',
-      'Spelling': 'produce',
-      'Phonetic': '/prəˈdjuːs/',
-      'Definition': 'v. 生产；产生；制造',
-      'Etymology_JSON': '{"prefix":"pro-=forward","root":"duc=lead","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The factory produces thousands of cars each year.","zh":"这家工厂每年生产数千辆汽车。"}',
-      'Content_JSON': '{"spelling":"produce","phonetic":"/prəˈdjuːs/","definition":"v. 生产；产生；制造","etymology":"pro-=向前+duc=引导→引导出来→生产","example":"The factory produces thousands of cars each year.","translation":"这家工厂每年生产数千辆汽车。"}',
+      'Concept_UUID': 'note_transplant',
+      'Spelling': 'transplant',
+      'Phonetic': '/trænsˈplɑːnt/',
+      'Definition': 'v. 移植；迁移 n. 移植；器官移植',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"plant=种植","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The surgeon will transplant the kidney tomorrow.","zh":"外科医生明天将进行肾脏移植手术。"}',
+      'Content_JSON': '{"spelling":"transplant","phonetic":"/trænsˈplɑːnt/","definition":"v. 移植；迁移 n. 移植；器官移植","etymology":"trans-=跨越+plant=种植→跨越种植→移植","example":"The surgeon will transplant the kidney tomorrow.","translation":"外科医生明天将进行肾脏移植手术。"}',
     },
     {
-      'Concept_UUID': 'note_introduce',
-      'Spelling': 'introduce',
-      'Phonetic': '/ˌɪntrəˈdjuːs/',
-      'Definition': 'v. 介绍；引进；提出',
-      'Etymology_JSON': '{"prefix":"intro-=within","root":"duc=lead","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Let me introduce my colleague to you.","zh":"让我给你介绍一下我的同事。"}',
-      'Content_JSON': '{"spelling":"introduce","phonetic":"/ˌɪntrəˈdjuːs/","definition":"v. 介绍；引进；提出","etymology":"intro-=向内+duc=引导→引导进来→介绍","example":"Let me introduce my colleague to you.","translation":"让我给你介绍一下我的同事。"}',
+      'Concept_UUID': 'note_transaction',
+      'Spelling': 'transaction',
+      'Phonetic': '/trænˈzækʃn/',
+      'Definition': 'n. 交易；业务；办理',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"action=行为/行动","suffix":""}',
+      'Micro_Context_JSON': '{"en":"All transactions are recorded in the system.","zh":"所有交易都在系统中记录。"}',
+      'Content_JSON': '{"spelling":"transaction","phonetic":"/trænˈzækʃn/","definition":"n. 交易；业务；办理","etymology":"trans-=跨越+action=行为→跨越性行为→交易","example":"All transactions are recorded in the system.","translation":"所有交易都在系统中记录。"}',
     },
     {
-      'Concept_UUID': 'note_conduct',
-      'Spelling': 'conduct',
-      'Phonetic': '/kənˈdʌkt/',
-      'Definition': 'v. 引导；传导；实施',
-      'Etymology_JSON': '{"prefix":"con-=together","root":"duct=lead","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The teacher will conduct the experiment.","zh":"老师将进行这个实验。"}',
-      'Content_JSON': '{"spelling":"conduct","phonetic":"/kənˈdʌkt/","definition":"v. 引导；传导；实施","etymology":"con-=共同+duct=引导→引导到一起→组织","example":"The teacher will conduct the experiment.","translation":"老师将进行这个实验。"}',
+      'Concept_UUID': 'note_transcend',
+      'Spelling': 'transcend',
+      'Phonetic': '/trænˈsend/',
+      'Definition': 'v. 超越；胜过；超出...的范围',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"scend=攀爬/上升（scandere）","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The movie transcends the typical Hollywood formula.","zh":"这部电影超越了典型的好莱坞套路。"}',
+      'Content_JSON': '{"spelling":"transcend","phonetic":"/trænˈsend/","definition":"v. 超越；胜过；超出...的范围","etymology":"trans-=跨越+scend=攀爬→跨越攀爬→超越","example":"The movie transcends the typical Hollywood formula.","translation":"这部电影超越了典型的好莱坞套路。"}',
+    },
+    {
+      'Concept_UUID': 'note_transfuse',
+      'Spelling': 'transfuse',
+      'Phonetic': '/trænsˈfjuːz/',
+      'Definition': 'v. 输注；灌输；渗透',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"fuse=倾倒/注入","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The doctor transfused blood into the patient.","zh":"医生给病人输了血。"}',
+      'Content_JSON': '{"spelling":"transfuse","phonetic":"/trænsˈfjuːz/","definition":"v. 输注；灌输；渗透","etymology":"trans-=跨越+fuse=倾倒→跨越倾倒→输注","example":"The doctor transfused blood into the patient.","translation":"医生给病人输了血。"}',
+    },
+    {
+      'Concept_UUID': 'note_transition',
+      'Spelling': 'transition',
+      'Phonetic': '/trænˈzɪʃn/',
+      'Definition': 'n. 过渡；转变；变迁 v. 转变；过渡',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"it=走（ire）","suffix":"-ion=行为/状态"}',
+      'Micro_Context_JSON': '{"en":"The country is in transition to democracy.","zh":"该国正在向民主过渡。"}',
+      'Content_JSON': '{"spelling":"transition","phonetic":"/trænˈzɪʃn/","definition":"n. 过渡；转变；变迁 v. 转变；过渡","etymology":"trans-=跨越+it=走+-ion=状态→跨越行走的状态→过渡","example":"The country is in transition to democracy.","translation":"该国正在向民主过渡。"}',
+    },
+    {
+      'Concept_UUID': 'note_transgress',
+      'Spelling': 'transgress',
+      'Phonetic': '/trænzˈɡres/',
+      'Definition': 'v. 越界；违背；违反（规则、法律等）',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"gress=迈步/行走","suffix":""}',
+      'Micro_Context_JSON': '{"en":"No one should transgress the law.","zh":"任何人都不能违法。"}',
+      'Content_JSON': '{"spelling":"transgress","phonetic":"/trænzˈɡres/","definition":"v. 越界；违背；违反（规则、法律等）","etymology":"trans-=跨越+gress=迈步→跨越界限迈步→越界","example":"No one should transgress the law.","translation":"任何人都不能违法。"}',
+    },
+    {
+      'Concept_UUID': 'note_translucent',
+      'Spelling': 'translucent',
+      'Phonetic': '/trænzˈluːsnt/',
+      'Definition': 'adj. 半透明的；透光的',
+      'Etymology_JSON': '{"prefix":"trans-=穿透","root":"lucent=发光/明亮（lucere）","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The lampshade is made of translucent glass.","zh":"灯罩是用半透明玻璃制成的。"}',
+      'Content_JSON': '{"spelling":"translucent","phonetic":"/trænzˈluːsnt/","definition":"adj. 半透明的；透光的","etymology":"trans-=穿透+lucent=发光→穿透发光→半透明的","example":"The lampshade is made of translucent glass.","translation":"灯罩是用半透明玻璃制成的。"}',
+    },
+    {
+      'Concept_UUID': 'note_transcribe',
+      'Spelling': 'transcribe',
+      'Phonetic': '/trænˈskraɪb/',
+      'Definition': 'v. 转录；抄写；改编',
+      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"scribe=写","suffix":""}',
+      'Micro_Context_JSON': '{"en":"Please transcribe the interview recording.","zh":"请转录采访录音。"}',
+      'Content_JSON': '{"spelling":"transcribe","phonetic":"/trænˈskraɪb/","definition":"v. 转录；抄写；改编","etymology":"trans-=跨越+scribe=写→跨越写下→转录","example":"Please transcribe the interview recording.","translation":"请转录采访录音。"}',
+    },
+    {
+      'Concept_UUID': 'note_transit',
+      'Spelling': 'transit',
+      'Phonetic': '/ˈtrænzɪt/',
+      'Definition': 'n. 运输；通行；交通运输 v. 通过；穿越',
+      'Etymology_JSON': '{"prefix":"trans-=穿过","root":"it=走（ire）","suffix":""}',
+      'Micro_Context_JSON': '{"en":"The goods are in transit.","zh":"货物正在运输中。"}',
+      'Content_JSON': '{"spelling":"transit","phonetic":"/ˈtrænzɪt/","definition":"n. 运输；通行；交通运输 v. 通过；穿越","etymology":"trans-=穿过+it=走→穿过走→通行","example":"The goods are in transit.","translation":"货物正在运输中。"}',
     },
   ];
 
@@ -397,27 +625,11 @@ Future<void> _seedRomData(Database db) async {
   }
 
   // --------------------------------------------------------------------------
-  // Tree_Root 数据（6个词根，按 A/C/D/R/T 分组）
+  // Tree_Root 数据（2个词根）
   // --------------------------------------------------------------------------
   final treeRoots = [
-    {'Root_ID': 'root_ad', 'Root_Name': 'ad', 'Root_Definition': '向、靠近', 'Root_Group': 'A'},
-    {'Root_ID': 'root_ced', 'Root_Name': 'ced', 'Root_Definition': '走、前进', 'Root_Group': 'C'},
-    // D组
-    {'Root_ID': 'root_de', 'Root_Name': 'de', 'Root_Definition': '向下、离开、否定', 'Root_Group': 'D'},
-    // R组
-    {'Root_ID': 'root_re', 'Root_Name': 're', 'Root_Definition': '再、回来', 'Root_Group': 'R'},
-    // T组
-    {'Root_ID': 'root_trans', 'Root_Name': 'trans', 'Root_Definition': '跨越、改变', 'Root_Group': 'T'},
-    {'Root_ID': 'root_duct', 'Root_Name': 'duct', 'Root_Definition': '引导、带领', 'Root_Group': 'D'},
-    // P组 - 新增词根
-    {'Root_ID': 'root_pro', 'Root_Name': 'pro', 'Root_Definition': '向前、替代', 'Root_Group': 'P'},
-    {'Root_ID': 'root_pre', 'Root_Name': 'pre', 'Root_Definition': '前、预先', 'Root_Group': 'P'},
-    // S组 - 新增词根
-    {'Root_ID': 'root_sub', 'Root_Name': 'sub', 'Root_Definition': '下、在下', 'Root_Group': 'S'},
-    // D组 - 新增词根
-    {'Root_ID': 'root_dis', 'Root_Name': 'dis', 'Root_Definition': '分开、否定', 'Root_Group': 'D'},
-    // I组 - 新增词根
-    {'Root_ID': 'root_in', 'Root_Name': 'in', 'Root_Definition': '内、向内', 'Root_Group': 'I'},
+    {'Root_ID': 'root_re', 'Root_Name': 're', 'Root_Definition': '再、重新、向后', 'Root_Group': 'R'},
+    {'Root_ID': 'root_trans', 'Root_Name': 'trans', 'Root_Definition': '横跨、穿过、跨越', 'Root_Group': 'T'},
   ];
 
   for (final root in treeRoots) {
@@ -425,48 +637,52 @@ Future<void> _seedRomData(Database db) async {
   }
 
   // --------------------------------------------------------------------------
-  // Tree_Word 数据（派生词）
+  // Tree_Word 数据（re 和 trans 派生词，严格按用户格式）
   // --------------------------------------------------------------------------
-  final treeWords = [
-    // ced 词根
-    {'Root_ID': 'root_ced', 'Concept_UUID': 'note_accede', 'Compound_Form': 'ac+ced+e', 'Compound_Meaning': '向+走+e', 'Final_Meaning': '走到一起→同意', 'Sort_Order': 1},
-    {'Root_ID': 'root_ced', 'Concept_UUID': 'note_proceed', 'Compound_Form': 'pro+ceed', 'Compound_Meaning': '向前+走', 'Final_Meaning': '向前走→继续', 'Sort_Order': 2},
-    {'Root_ID': 'root_ced', 'Concept_UUID': 'note_concede', 'Compound_Form': 'con+cede', 'Compound_Meaning': '共同+走', 'Final_Meaning': '共同走→让步', 'Sort_Order': 3},
-    {'Root_ID': 'root_ced', 'Concept_UUID': 'note_exceed', 'Compound_Form': 'ex+ceed', 'Compound_Meaning': '出+走', 'Final_Meaning': '走出→超过', 'Sort_Order': 4},
-    // ad 词根
-    {'Root_ID': 'root_ad', 'Concept_UUID': 'note_adapt', 'Compound_Form': 'ad+apt', 'Compound_Meaning': '向+适合', 'Final_Meaning': '使适合→适应', 'Sort_Order': 1},
-    {'Root_ID': 'root_ad', 'Concept_UUID': 'note_adopt', 'Compound_Form': 'ad+opt', 'Compound_Meaning': '向+选择', 'Final_Meaning': '选择→采纳', 'Sort_Order': 2},
-    {'Root_ID': 'root_ad', 'Concept_UUID': 'note_combine', 'Compound_Form': 'com+bine', 'Compound_Meaning': '共同+二', 'Final_Meaning': '合二为一→合并', 'Sort_Order': 3},
-    {'Root_ID': 'root_ad', 'Concept_UUID': 'note_compete', 'Compound_Form': 'com+pete', 'Compound_Meaning': '共同+追求', 'Final_Meaning': '共同追求→竞争', 'Sort_Order': 4},
-    // de 词根
-    {'Root_ID': 'root_de', 'Concept_UUID': 'note_describe', 'Compound_Form': 'de+scribe', 'Compound_Meaning': '向下+写', 'Final_Meaning': '写下→描述', 'Sort_Order': 1},
-    {'Root_ID': 'root_de', 'Concept_UUID': 'note_decide', 'Compound_Form': 'de+cide', 'Compound_Meaning': '完全+切', 'Final_Meaning': '切掉→决定', 'Sort_Order': 2},
-    {'Root_ID': 'root_de', 'Concept_UUID': 'note_reduce', 'Compound_Form': 're+duce', 'Compound_Meaning': '回+引导', 'Final_Meaning': '往回引→减少', 'Sort_Order': 3},
-    // re 词根
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_react', 'Compound_Form': 're+act', 'Compound_Meaning': '回+做', 'Final_Meaning': '回做→反应', 'Sort_Order': 1},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_return', 'Compound_Form': 're+turn', 'Compound_Meaning': '回+转', 'Final_Meaning': '转回→返回', 'Sort_Order': 2},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_review', 'Compound_Form': 're+view', 'Compound_Meaning': '再+看', 'Final_Meaning': '再看→复习', 'Sort_Order': 3},
-    // trans 词根
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_translate', 'Compound_Form': 'trans+late', 'Compound_Meaning': '跨+带', 'Final_Meaning': '带过去→翻译', 'Sort_Order': 1},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transport', 'Compound_Form': 'trans+port', 'Compound_Meaning': '跨+搬运', 'Final_Meaning': '搬运过去→运输', 'Sort_Order': 2},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transform', 'Compound_Form': 'trans+form', 'Compound_Meaning': '跨+形状', 'Final_Meaning': '改变形状→改造', 'Sort_Order': 3},
-    // duct 词根
-    {'Root_ID': 'root_duct', 'Concept_UUID': 'note_produce', 'Compound_Form': 'pro+duce', 'Compound_Meaning': '向前+引导', 'Final_Meaning': '引导出来→生产', 'Sort_Order': 1},
-    {'Root_ID': 'root_duct', 'Concept_UUID': 'note_introduce', 'Compound_Form': 'intro+duce', 'Compound_Meaning': '向内+引导', 'Final_Meaning': '引导进来→介绍', 'Sort_Order': 2},
-    {'Root_ID': 'root_duct', 'Concept_UUID': 'note_conduct', 'Compound_Form': 'con+duct', 'Compound_Meaning': '共同+引导', 'Final_Meaning': '引导到一起→组织', 'Sort_Order': 3},
-    // pro 词根 - 新增
-    {'Root_ID': 'root_pro', 'Concept_UUID': 'note_proceed', 'Compound_Form': 'pro+ceed', 'Compound_Meaning': '向前+走', 'Final_Meaning': '向前走→前进、进行', 'Sort_Order': 1},
-    // pre 词根 - 新增
-    {'Root_ID': 'root_pre', 'Concept_UUID': 'note_preview', 'Compound_Form': 'pre+view', 'Compound_Meaning': '预先+看', 'Final_Meaning': '再看→预习、预映', 'Sort_Order': 1},
-    {'Root_ID': 'root_pre', 'Concept_UUID': 'note_predict', 'Compound_Form': 'pre+dict', 'Compound_Meaning': '预先+说', 'Final_Meaning': '预先说→预言、预测', 'Sort_Order': 2},
-    // sub 词根 - 新增
-    {'Root_ID': 'root_sub', 'Concept_UUID': 'note_submit', 'Compound_Form': 'sub+mit', 'Compound_Meaning': '下+放', 'Final_Meaning': '往下放→提交、呈递', 'Sort_Order': 1},
-    // dis 词根 - 新增
-    {'Root_ID': 'root_dis', 'Concept_UUID': 'note_disagree', 'Compound_Form': 'dis+agree', 'Compound_Meaning': '不+同意', 'Final_Meaning': '不同意→意见不合', 'Sort_Order': 1},
-    {'Root_ID': 'root_dis', 'Concept_UUID': 'note_disappear', 'Compound_Form': 'dis+appear', 'Compound_Meaning': '不+出现', 'Final_Meaning': '不出现→消失、不见', 'Sort_Order': 2},
-    // in 词根 - 新增
-    {'Root_ID': 'root_in', 'Concept_UUID': 'note_inside', 'Compound_Form': 'in+side', 'Compound_Meaning': '内+边', 'Final_Meaning': '内边→内部', 'Sort_Order': 1},
-    {'Root_ID': 'root_in', 'Concept_UUID': 'note_inject', 'Compound_Form': 'in+ject', 'Compound_Meaning': '内+扔', 'Final_Meaning': '往内扔→注射、注入', 'Sort_Order': 2},
+  final treeWords = <Map<String, dynamic>>[
+    // re 词根（25个派生词）
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reassure', 'Compound_Form': 're+assure', 'Compound_Meaning': '再次使确信', 'Final_Meaning': '使安心', 'Sort_Order': 1},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recollect', 'Compound_Form': 're+collect', 'Compound_Meaning': '重新收集', 'Final_Meaning': '回忆起', 'Sort_Order': 2},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reconcile', 'Compound_Form': 're+concile', 'Compound_Meaning': '重新协调', 'Final_Meaning': '和解', 'Sort_Order': 3},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reproduce', 'Compound_Form': 're+produce', 'Compound_Meaning': '重新生产', 'Final_Meaning': '繁殖', 'Sort_Order': 4},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_request', 'Compound_Form': 're+quest', 'Compound_Meaning': '一再寻求', 'Final_Meaning': '请求', 'Sort_Order': 5},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recommend', 'Compound_Form': 're+commend', 'Compound_Meaning': '再次赞赏', 'Final_Meaning': '推荐', 'Sort_Order': 6},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recompense', 'Compound_Form': 're+compense', 'Compound_Meaning': '重新补偿', 'Final_Meaning': '赔偿', 'Sort_Order': 7},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_restrain', 'Compound_Form': 're+strain', 'Compound_Meaning': '向后拉紧', 'Final_Meaning': '抑制', 'Sort_Order': 8},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_retail', 'Compound_Form': 're+tail', 'Compound_Meaning': '再次切割', 'Final_Meaning': '零售', 'Sort_Order': 9},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_revolve', 'Compound_Form': 're+volve', 'Compound_Meaning': '一再滚动', 'Final_Meaning': '旋转', 'Sort_Order': 10},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_refresh', 'Compound_Form': 're+fresh', 'Compound_Meaning': '再次新鲜', 'Final_Meaning': '刷新', 'Sort_Order': 11},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_remark', 'Compound_Form': 're+mark', 'Compound_Meaning': '一再标记', 'Final_Meaning': '评论', 'Sort_Order': 12},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_remarkable', 'Compound_Form': 're+mark+able', 'Compound_Meaning': '值得一再标记的', 'Final_Meaning': '卓越的', 'Sort_Order': 13},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recite', 'Compound_Form': 're+cite', 'Compound_Meaning': '再次唤起', 'Final_Meaning': '背诵', 'Sort_Order': 14},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_renaissance', 'Compound_Form': 're+naissance', 'Compound_Meaning': '重新诞生', 'Final_Meaning': '文艺复兴', 'Sort_Order': 15},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recount', 'Compound_Form': 're+count', 'Compound_Meaning': '重新计算', 'Final_Meaning': '叙述', 'Sort_Order': 16},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_renovation', 'Compound_Form': 're+nov+ation', 'Compound_Meaning': '重新造新', 'Final_Meaning': '翻修', 'Sort_Order': 17},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reinforce', 'Compound_Form': 're+inforce', 'Compound_Meaning': '再次加强', 'Final_Meaning': '强化', 'Sort_Order': 18},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_renew', 'Compound_Form': 're+new', 'Compound_Meaning': '重新变新', 'Final_Meaning': '更新', 'Sort_Order': 19},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_require', 'Compound_Form': 're+quire', 'Compound_Meaning': '一再寻求', 'Final_Meaning': '需要', 'Sort_Order': 20},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_replace', 'Compound_Form': 're+place', 'Compound_Meaning': '重新放置', 'Final_Meaning': '替换', 'Sort_Order': 21},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_register', 'Compound_Form': 're+gister', 'Compound_Meaning': '带回记录', 'Final_Meaning': '登记', 'Sort_Order': 22},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_resemble', 'Compound_Form': 're+semble', 'Compound_Meaning': '再次相似', 'Final_Meaning': '类似', 'Sort_Order': 23},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_resemblance', 'Compound_Form': 're+semblance', 'Compound_Meaning': '再次相似的状态', 'Final_Meaning': '相似之处', 'Sort_Order': 24},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_remain', 'Compound_Form': 're+main', 'Compound_Meaning': '向后停留', 'Final_Meaning': '保持', 'Sort_Order': 25},
+    {'Root_ID': 'root_re', 'Concept_UUID': 'note_restrict', 'Compound_Form': 're+strict', 'Compound_Meaning': '往回拉紧', 'Final_Meaning': '限制', 'Sort_Order': 26},
+    // trans 词根（15个派生词）
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transfer', 'Compound_Form': 'trans+fer', 'Compound_Meaning': '跨越携带', 'Final_Meaning': '转移', 'Sort_Order': 1},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_translate', 'Compound_Form': 'trans+late', 'Compound_Meaning': '跨越搬运', 'Final_Meaning': '翻译', 'Sort_Order': 2},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transmit', 'Compound_Form': 'trans+mit', 'Compound_Meaning': '跨越发送', 'Final_Meaning': '传输', 'Sort_Order': 3},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transport', 'Compound_Form': 'trans+port', 'Compound_Meaning': '跨越搬运', 'Final_Meaning': '运输', 'Sort_Order': 4},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transform', 'Compound_Form': 'trans+form', 'Compound_Meaning': '跨越改变形状', 'Final_Meaning': '变形', 'Sort_Order': 5},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transparent', 'Compound_Form': 'trans+parent', 'Compound_Meaning': '穿透显现', 'Final_Meaning': '透明的', 'Sort_Order': 6},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transplant', 'Compound_Form': 'trans+plant', 'Compound_Meaning': '跨越种植', 'Final_Meaning': '移植', 'Sort_Order': 7},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transaction', 'Compound_Form': 'trans+action', 'Compound_Meaning': '跨越交互行动', 'Final_Meaning': '交易', 'Sort_Order': 8},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transcend', 'Compound_Form': 'trans+scend', 'Compound_Meaning': '跨越攀爬', 'Final_Meaning': '超越', 'Sort_Order': 9},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transfuse', 'Compound_Form': 'trans+fuse', 'Compound_Meaning': '跨越倾倒', 'Final_Meaning': '输注', 'Sort_Order': 10},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transition', 'Compound_Form': 'trans+it+ion', 'Compound_Meaning': '跨越行走的状态', 'Final_Meaning': '过渡', 'Sort_Order': 11},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transgress', 'Compound_Form': 'trans+gress', 'Compound_Meaning': '跨越界限迈步', 'Final_Meaning': '越界', 'Sort_Order': 12},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_translucent', 'Compound_Form': 'trans+lucent', 'Compound_Meaning': '穿透发光', 'Final_Meaning': '半透明的', 'Sort_Order': 13},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transcribe', 'Compound_Form': 'trans+scribe', 'Compound_Meaning': '跨越写下', 'Final_Meaning': '转录', 'Sort_Order': 14},
+    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transit', 'Compound_Form': 'trans+it', 'Compound_Meaning': '穿过走', 'Final_Meaning': '通行', 'Sort_Order': 15},
   ];
 
   for (final word in treeWords) {
@@ -474,180 +690,243 @@ Future<void> _seedRomData(Database db) async {
   }
 
   // --------------------------------------------------------------------------
-  // Topic & Article 数据
-  // --------------------------------------------------------------------------
-  // 科技主题
+  // Topic & Article 数据（仅保留科技阅读专题，语义阅读训练已移除）
+  // 科技阅读专题通过 _seedSemanticReadingData 和 _ensureSemanticReadingDataSeeded 函数管理
+}
+
+// --------------------------------------------------------------------------
+// 语义阅读专题：科技阅读（词级高亮演示）
+// --------------------------------------------------------------------------
+Future<void> _seedSemanticReadingData(Database db) async {
+  // Note：evolution / efficiency / digital / frequently
+  final evolutionNote = {
+    'Concept_UUID': 'note_evolution',
+    'Spelling': 'evolution',
+    'Phonetic': '/ˌiːvəˈluːʃn/',
+    'Definition': 'n. 进化；演变；发展',
+    'Etymology_JSON': '{"roots":[{"root":"e-","meaning":"外、出"},{"root":"vol","meaning":"卷、转"},{"root":"-ution","meaning":"过程"}],"compound":"e(出)+vol(转)+ution(过程)→转出来→进化","final":"进化"}',
+    'Micro_Context_JSON': '{"zh":"The evolution of communication technology illustrates humanity\'s pursuit of efficiency.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
+    'Content_JSON': '{"spelling":"evolution","phonetic":"/ˌiːvəˈluːʃn/","definition":"n. 进化；演变；发展","etymology":"e-(出)+vol(转)+-ution(过程)→转出来→进化","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
+  };
+  final efficiencyNote = {
+    'Concept_UUID': 'note_efficiency',
+    'Spelling': 'efficiency',
+    'Phonetic': '/ɪˈfɪʃnsi/',
+    'Definition': 'n. 效率；效能',
+    'Etymology_JSON': '{"roots":[{"root":"ef-","meaning":"出"},{"root":"fic","meaning":"做"},{"root":"-iency","meaning":"性质/状态"}],"compound":"ef(出)+fic(做)+-iency(性质)→做出来的效果→效率","final":"效率"}',
+    'Micro_Context_JSON': '{"zh":"The telegraph was a crude device to transmit signals across vast distances.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
+    'Content_JSON': '{"spelling":"efficiency","phonetic":"/ɪˈfɪʃnsi/","definition":"n. 效率；效能","etymology":"ef-(出)+fic(做)+-iency(性质)→做出来的效果→效率","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
+  };
+  final digitalNote = {
+    'Concept_UUID': 'note_digital',
+    'Spelling': 'digital',
+    'Phonetic': '/ˈdɪdʒɪtl/',
+    'Definition': 'adj. 数字的；数码的',
+    'Etymology_JSON': '{"roots":[{"root":"digit","meaning":"手指/数字"},{"root":"-al","meaning":"...的"}],"compound":"digit(数字)+-al(...的)→数字的","final":"数字的"}',
+    'Micro_Context_JSON': '{"zh":"In the digital age, we rely heavily on technology.","en":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding."}',
+    'Content_JSON': '{"spelling":"digital","phonetic":"/ˈdɪdʒɪtl/","definition":"adj. 数字的；数码的","etymology":"digit(数字)+-al(...的)→数字的","example":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding.","translation":"在数字时代，数字设备的普及使现代生活日益 demanding。"}',
+  };
+  final frequentlyNote = {
+    'Concept_UUID': 'note_frequently',
+    'Spelling': 'frequently',
+    'Phonetic': '/ˈfriːkwəntli/',
+    'Definition': 'adv. 频繁地；经常地',
+    'Etymology_JSON': '{"roots":[{"root":"frequent","meaning":"频繁的"},{"root":"-ly","meaning":"副词后缀"}],"compound":"frequent(频繁的)+-ly(副词)→频繁地","final":"频繁地"}',
+    'Micro_Context_JSON': '{"zh":"We frequently browse massive amounts of data on our portable gadgets.","en":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed."}',
+    'Content_JSON': '{"spelling":"frequently","phonetic":"/ˈfriːkwəntli/","definition":"adv. 频繁地；经常地","etymology":"frequent(频繁的)+-ly(副词)→频繁地","example":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed.","translation":"我们频繁地在便携设备上浏览大量数据，希望保持信息灵通。"}',
+  };
+
+  await db.insert(kTableNote, evolutionNote);
+  await db.insert(kTableNote, efficiencyNote);
+  await db.insert(kTableNote, digitalNote);
+  await db.insert(kTableNote, frequentlyNote);
+
+  // Topic: 科技阅读
   await db.insert(kTableTopic, {
-    'Topic_ID': 'topic_tech',
-    'Topic_Name': '科技词汇',
-    'Topic_Name_EN': 'Technology',
+    'Topic_ID': 'topic_tech_read',
+    'Topic_Name': '科技阅读',
+    'Topic_Name_EN': 'Tech Reading',
+    'Word_Count': 2,
+  });
+
+  // Article: 第一篇
+  final techArticleContent = {
+    'title': 'The Evolution of Communication Technology',
+    'segments': [
+      {'t': 'The ', 'c': 0, 'u': ''},
+      {'t': 'evolution', 'c': 1, 'u': 'note_evolution'},
+      {'t': ' of communication technology vividly illustrates humanity\'s relentless pursuit of ', 'c': 0, 'u': ''},
+      {'t': 'efficiency', 'c': 1, 'u': 'note_efficiency'},
+      {'t': '. Initially, early inventors relied on a rather crude device, the telegraph, to transmit simple text signals across vast distances. Over time, as scientists continued to refine these primitive systems, the ability to broadcast voice and video globally became a ubiquitous reality. In the contemporary digital era, the focus has fundamentally shifted. Modern industries now fabricate intricate microchips that process massive amounts of information, which is subsequently stored in an expansive, interconnected database. This remarkable transition from basic wires to sophisticated data networks has profoundly reshaped human society.', 'c': 0, 'u': ''},
+    ],
+  };
+
+  await db.insert(kTableArticle, {
+    'Article_ID': 'art_tech_read_01',
+    'Topic_ID': 'topic_tech_read',
+    'Word_Count': 2,
+    'Content_JSON': jsonEncode(techArticleContent),
+  });
+
+  // Article: 第二篇（占位）
+  final techArticle2Content = {
+    'title': 'Artificial Intelligence: Past, Present, and Future',
+    'segments': [
+      {'t': 'Artificial ', 'c': 0, 'u': ''},
+      {'t': 'intelligence', 'c': 1, 'u': 'note_intelligence'},
+      {'t': ' has transformed every facet of modern life. From the earliest ', 'c': 0, 'u': ''},
+      {'t': 'algorithms', 'c': 1, 'u': 'note_algorithm'},
+      {'t': ' that played chess to the contemporary large language models capable of natural conversation, the trajectory of AI reflects humanity\'s endless ambition to ', 'c': 0, 'u': ''},
+      {'t': 'simulate', 'c': 1, 'u': 'note_simulate'},
+      {'t': ' cognition. Yet this rapid advancement raises profound ethical questions about ', 'c': 0, 'u': ''},
+      {'t': 'privacy', 'c': 1, 'u': 'note_privacy'},
+      {'t': ' and societal impact. Striking a balance between innovation and responsibility remains the defining challenge of our era.', 'c': 0, 'u': ''},
+    ],
+  };
+
+  await db.insert(kTableArticle, {
+    'Article_ID': 'art_tech_read_02',
+    'Topic_ID': 'topic_tech_read',
     'Word_Count': 4,
+    'Content_JSON': jsonEncode(techArticle2Content),
   });
 
-  // 科技文章：AI与未来
-  await db.insert(kTableArticle, {
-    'Article_ID': 'article_tech_1',
-    'Topic_ID': 'topic_tech',
-    'Word_Count': 4,
-    'Content_JSON': _buildArticleContent([
-      {'uuid': 'note_translate', 't': 'This new AI system can ', 'c': 0},
-      {'uuid': 'note_translate', 't': 'translate', 'c': 1},
-      {'uuid': 'note_translate', 't': ' languages in real time. It uses advanced algorithms to ', 'c': 0},
-      {'uuid': 'note_produce', 't': 'produce', 'c': 1},
-      {'uuid': 'note_produce', 't': ' natural-sounding speech. The technology will ', 'c': 0},
-      {'uuid': 'note_transform', 't': 'transform', 'c': 1},
-      {'uuid': 'note_transform', 't': ' how we communicate globally.', 'c': 0},
-    ]),
-  });
-
-  // 科技文章2：自动驾驶
-  await db.insert(kTableArticle, {
-    'Article_ID': 'article_tech_2',
-    'Topic_ID': 'topic_tech',
-    'Word_Count': 3,
-    'Content_JSON': _buildArticleContent([
-      {'uuid': 'note_introduce', 't': 'Self-driving cars will soon ', 'c': 0},
-      {'uuid': 'note_introduce', 't': 'introduce', 'c': 1},
-      {'uuid': 'note_introduce', 't': ' a new era of transport. Sensors ', 'c': 0},
-      {'uuid': 'note_react', 't': 'react', 'c': 1},
-      {'uuid': 'note_react', 't': ' instantly to road conditions, making travel safer. This technology will ', 'c': 0},
-      {'uuid': 'note_reduce', 't': 'reduce', 'c': 1},
-      {'uuid': 'note_reduce', 't': ' accidents significantly.', 'c': 0},
-    ]),
-  });
-
-  // 日常主题
-  await db.insert(kTableTopic, {
-    'Topic_ID': 'topic_daily',
-    'Topic_Name': '日常词汇',
-    'Topic_Name_EN': 'Daily Life',
-    'Word_Count': 4,
-  });
-
-  // 日常文章：城市生活
-  await db.insert(kTableArticle, {
-    'Article_ID': 'article_daily_1',
-    'Topic_ID': 'topic_daily',
-    'Word_Count': 4,
-    'Content_JSON': _buildArticleContent([
-      {'uuid': 'note_adapt', 't': 'Living in a big city requires you to ', 'c': 0},
-      {'uuid': 'note_adapt', 't': 'adapt', 'c': 1},
-      {'uuid': 'note_adapt', 't': ' to a fast-paced lifestyle. Every day, people ', 'c': 0},
-      {'uuid': 'note_proceed', 't': 'proceed', 'c': 1},
-      {'uuid': 'note_proceed', 't': ' to work without hesitation. Sometimes we must ', 'c': 0},
-      {'uuid': 'note_decide', 't': 'decide', 'c': 1},
-      {'uuid': 'note_decide', 't': ' quickly on important matters.', 'c': 0},
-    ]),
-  });
-
-  // 日常文章2：团队协作
-  await db.insert(kTableArticle, {
-    'Article_ID': 'article_daily_2',
-    'Topic_ID': 'topic_daily',
-    'Word_Count': 3,
-    'Content_JSON': _buildArticleContent([
-      {'uuid': 'note_adopt', 't': 'Our team decided to ', 'c': 0},
-      {'uuid': 'note_adopt', 't': 'adopt', 'c': 1},
-      {'uuid': 'note_adopt', 't': ' a new project management tool. It helps us ', 'c': 0},
-      {'uuid': 'note_combine', 't': 'combine', 'c': 1},
-      {'uuid': 'note_combine', 't': ' our strengths and work more efficiently. When problems arise, we must ', 'c': 0},
-      {'uuid': 'note_compete', 't': 'compete', 'c': 1},
-      {'uuid': 'note_compete', 't': ' with rival teams to stay ahead.', 'c': 0},
-    ]),
-  });
-
-  // 词根主题
-  await db.insert(kTableTopic, {
-    'Topic_ID': 'topic_prefix',
-    'Topic_Name': '词根词缀',
-    'Topic_Name_EN': 'Roots & Prefixes',
-    'Word_Count': 4,
-  });
-
-  // 词根文章
-  await db.insert(kTableArticle, {
-    'Article_ID': 'article_prefix_1',
-    'Topic_ID': 'topic_prefix',
-    'Word_Count': 4,
-    'Content_JSON': _buildArticleContent([
-      {'uuid': 'note_accede', 't': 'The prefix "ad-" means "to" or "toward". When attached to a root, it can ', 'c': 0},
-      {'uuid': 'note_accede', 't': 'accede', 'c': 1},
-      {'uuid': 'note_accede', 't': ' the meaning of approaching. Similarly, "con-" means "with" or "together", and "de-" means "down" or "away". These prefixes help us ', 'c': 0},
-      {'uuid': 'note_describe', 't': 'describe', 'c': 1},
-      {'uuid': 'note_describe', 't': ' the direction and intensity of actions.', 'c': 0},
-    ]),
-  });
-
-  // 新增专题：词根词缀
-  await db.insert(kTableTopic, {
-    'Topic_ID': 'topic_suf',
-    'Topic_Name': '词根词缀专题',
-    'Topic_Name_EN': 'Roots & Affixes',
-    'Word_Count': 50,
-  });
+  // Article: 第三篇（新）
+  final techArticle3Content = {
+    'title': 'The Information Age',
+    'segments': [
+      {'t': 'In the ', 'c': 0, 'u': ''},
+      {'t': 'digital', 'c': 1, 'u': 'note_digital'},
+      {'t': ' age, the proliferation of ', 'c': 0, 'u': ''},
+      {'t': 'frequently', 'c': 1, 'u': 'note_frequently'},
+      {'t': ' browse massive amounts of data on our portable gadgets, hoping to stay informed. However, true productivity necessitates a focused effort to streamline our workflow, cutting through irrelevant noise. To manage information overload, individuals often look for a cognitive hack to save time, attempting to compress extensive knowledge into brief summaries. While this approach seems efficient, it risks diluting the depth of critical understanding. Mastery requires dedicated engagement rather than mere speed. Therefore, we should create opportunities to ventilate varying perspectives through careful analysis and rigorous discussion. Genuine wisdom is rarely achieved through superficial shortcuts; it demands profound contemplation.', 'c': 0, 'u': ''},
+    ],
+  };
 
   await db.insert(kTableArticle, {
-    'Article_ID': 'art_suf_01',
-    'Topic_ID': 'topic_suf',
-    'Word_Count': 50,
-    'Content_JSON': jsonEncode({
-      'title': '常用词根精讲：pro/pre/sub',
-      'sections': [
-        {'heading': 'pro — 向前', 'body': 'pro-表示"向前、为了、代替"...'},
-        {'heading': 'pre — 预先', 'body': 'pre-表示"在...之前"...'},
-        {'heading': 'sub — 在下', 'body': 'sub-表示"在下面、低于"...'},
-      ],
-    }),
-  });
-
-  await db.insert(kTableArticle, {
-    'Article_ID': 'art_suf_02',
-    'Topic_ID': 'topic_suf',
-    'Word_Count': 40,
-    'Content_JSON': jsonEncode({
-      'title': '前缀家族：dis/de/re',
-      'sections': [
-        {'heading': 'dis — 分开/否定', 'body': 'dis-表示"分开、否定"...'},
-      ],
-    }),
-  });
-
-  // 新增专题：语义阅读训练
-  await db.insert(kTableTopic, {
-    'Topic_ID': 'topic_read',
-    'Topic_Name': '语义阅读训练',
-    'Topic_Name_EN': 'Semantic Reading',
-    'Word_Count': 100,
-  });
-
-  await db.insert(kTableArticle, {
-    'Article_ID': 'art_read_01',
-    'Topic_ID': 'topic_read',
-    'Word_Count': 80,
-    'Content_JSON': jsonEncode({
-      'title': '阅读理解技巧：如何通过词根猜词义',
-      'sections': [
-        {'heading': '核心思想', 'body': '遇到不认识单词时，分析其词根词缀是高效猜词的技巧...'},
-        {'heading': '实例分析', 'body': '例：submarine...'},
-      ],
-    }),
-  });
-
-  await db.insert(kTableArticle, {
-    'Article_ID': 'art_read_02',
-    'Topic_ID': 'topic_read',
-    'Word_Count': 60,
-    'Content_JSON': jsonEncode({
-      'title': '英语词根故事：ced/gress/duct 三大词根',
-      'sections': [
-        {'heading': 'ced — 走', 'body': 'cedere 在拉丁语中意为"走"...'},
-      ],
-    }),
+    'Article_ID': 'art_tech_read_03',
+    'Topic_ID': 'topic_tech_read',
+    'Word_Count': 2,
+    'Content_JSON': jsonEncode(techArticle3Content),
   });
 }
 
-String _buildArticleContent(List<Map<String, dynamic>> segments) {
-  return jsonEncode(segments);
+Future<void> _ensureSemanticReadingDataSeeded(Database db) async {
+  // 检查 Topic 是否存在
+  final topicExists = Sqflite.firstIntValue(
+      await db.rawQuery("SELECT 1 FROM ${kTableTopic} WHERE Topic_ID = 'topic_tech_read'"));
+
+  await db.transaction((txn) async {
+    // Notes（ignore：不重复）
+    final noteEvolution = {
+      'Concept_UUID': 'note_evolution',
+      'Spelling': 'evolution',
+      'Phonetic': '/ˌiːvəˈluːʃn/',
+      'Definition': 'n. 进化；演变；发展',
+      'Etymology_JSON': '{"roots":[{"root":"e-","meaning":"外、出"},{"root":"vol","meaning":"卷、转"},{"root":"-ution","meaning":"过程"}],"compound":"e(出)+vol(转)+-ution(过程)→转出来→进化","final":"进化"}',
+      'Micro_Context_JSON': '{"zh":"The evolution of communication technology illustrates humanity\'s pursuit of efficiency.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
+      'Content_JSON': '{"spelling":"evolution","phonetic":"/ˌiːvəˈluːʃn/","definition":"n. 进化；演变；发展","etymology":"e-(出)+vol(转)+-ution(过程)→转出来→进化","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
+    };
+    final noteEfficiency = {
+      'Concept_UUID': 'note_efficiency',
+      'Spelling': 'efficiency',
+      'Phonetic': '/ɪˈfɪʃnsi/',
+      'Definition': 'n. 效率；效能',
+      'Etymology_JSON': '{"roots":[{"root":"ef-","meaning":"出"},{"root":"fic","meaning":"做"},{"root":"-iency","meaning":"性质/状态"}],"compound":"ef(出)+fic(做)+-iency(性质)→做出来的效果→效率","final":"效率"}',
+      'Micro_Context_JSON': '{"zh":"The telegraph was a crude device to transmit signals across vast distances.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
+      'Content_JSON': '{"spelling":"efficiency","phonetic":"/ɪˈfɪʃnsi/","definition":"n. 效率；效能","etymology":"ef-(出)+fic(做)+-iency(性质)→做出来的效果→效率","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
+    };
+    final noteDigital = {
+      'Concept_UUID': 'note_digital',
+      'Spelling': 'digital',
+      'Phonetic': '/ˈdɪdʒɪtl/',
+      'Definition': 'adj. 数字的；数码的',
+      'Etymology_JSON': '{"roots":[{"root":"digit","meaning":"手指/数字"},{"root":"-al","meaning":"...的"}],"compound":"digit(数字)+-al(...的)→数字的","final":"数字的"}',
+      'Micro_Context_JSON': '{"zh":"In the digital age, we rely heavily on technology.","en":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding."}',
+      'Content_JSON': '{"spelling":"digital","phonetic":"/ˈdɪdʒɪtl/","definition":"adj. 数字的；数码的","etymology":"digit(数字)+-al(...的)→数字的","example":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding.","translation":"在数字时代，数字设备的普及使现代生活日益 demanding。"}',
+    };
+    final noteFrequently = {
+      'Concept_UUID': 'note_frequently',
+      'Spelling': 'frequently',
+      'Phonetic': '/ˈfriːkwəntli/',
+      'Definition': 'adv. 频繁地；经常地',
+      'Etymology_JSON': '{"roots":[{"root":"frequent","meaning":"频繁的"},{"root":"-ly","meaning":"副词后缀"}],"compound":"frequent(频繁的)+-ly(副词)→频繁地","final":"频繁地"}',
+      'Micro_Context_JSON': '{"zh":"We frequently browse massive amounts of data on our portable gadgets.","en":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed."}',
+      'Content_JSON': '{"spelling":"frequently","phonetic":"/ˈfriːkwəntli/","definition":"adv. 频繁地；经常地","etymology":"frequent(频繁的)+-ly(副词)→频繁地","example":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed.","translation":"我们频繁地在便携设备上浏览大量数据，希望保持信息灵通。"}',
+    };
+    await txn.insert(kTableNote, noteEvolution, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await txn.insert(kTableNote, noteEfficiency, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await txn.insert(kTableNote, noteDigital, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await txn.insert(kTableNote, noteFrequently, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    // Topic（仅在不存在时创建）
+    if (topicExists == null) {
+      await txn.insert(kTableTopic, {
+        'Topic_ID': 'topic_tech_read',
+        'Topic_Name': '科技阅读',
+        'Topic_Name_EN': 'Tech Reading',
+        'Word_Count': 2,
+      });
+    }
+
+    // Articles（ignore：已存在不覆盖）
+    final techArticleContent = {
+      'title': 'The Evolution of Communication Technology',
+      'segments': [
+        {'t': 'The ', 'c': 0, 'u': ''},
+        {'t': 'evolution', 'c': 1, 'u': 'note_evolution'},
+        {'t': ' of communication technology vividly illustrates humanity\'s relentless pursuit of ', 'c': 0, 'u': ''},
+        {'t': 'efficiency', 'c': 1, 'u': 'note_efficiency'},
+        {'t': '. Initially, early inventors relied on a rather crude device, the telegraph, to transmit simple text signals across vast distances. Over time, as scientists continued to refine these primitive systems, the ability to broadcast voice and video globally became a ubiquitous reality. In the contemporary digital era, the focus has fundamentally shifted. Modern industries now fabricate intricate microchips that process massive amounts of information, which is subsequently stored in an expansive, interconnected database. This remarkable transition from basic wires to sophisticated data networks has profoundly reshaped human society.', 'c': 0, 'u': ''},
+      ],
+    };
+    await txn.insert(kTableArticle, {
+      'Article_ID': 'art_tech_read_01',
+      'Topic_ID': 'topic_tech_read',
+      'Word_Count': 2,
+      'Content_JSON': jsonEncode(techArticleContent),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    final techArticle2Content = {
+      'title': 'Artificial Intelligence: Past, Present, and Future',
+      'segments': [
+        {'t': 'Artificial ', 'c': 0, 'u': ''},
+        {'t': 'intelligence', 'c': 1, 'u': 'note_intelligence'},
+        {'t': ' has transformed every facet of modern life. From the earliest ', 'c': 0, 'u': ''},
+        {'t': 'algorithms', 'c': 1, 'u': 'note_algorithm'},
+        {'t': ' that played chess to the contemporary large language models capable of natural conversation, the trajectory of AI reflects humanity\'s endless ambition to ', 'c': 0, 'u': ''},
+        {'t': 'simulate', 'c': 1, 'u': 'note_simulate'},
+        {'t': ' cognition. Yet this rapid advancement raises profound ethical questions about ', 'c': 0, 'u': ''},
+        {'t': 'privacy', 'c': 1, 'u': 'note_privacy'},
+        {'t': ' and societal impact. Striking a balance between innovation and responsibility remains the defining challenge of our era.', 'c': 0, 'u': ''},
+      ],
+    };
+    await txn.insert(kTableArticle, {
+      'Article_ID': 'art_tech_read_02',
+      'Topic_ID': 'topic_tech_read',
+      'Word_Count': 4,
+      'Content_JSON': jsonEncode(techArticle2Content),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    // Article: 第三篇（新）
+    final techArticle3Content = {
+      'title': 'The Information Age',
+      'segments': [
+        {'t': 'In the ', 'c': 0, 'u': ''},
+        {'t': 'digital', 'c': 1, 'u': 'note_digital'},
+        {'t': ' age, the proliferation of ', 'c': 0, 'u': ''},
+        {'t': 'frequently', 'c': 1, 'u': 'note_frequently'},
+        {'t': ' browse massive amounts of data on our portable gadgets, hoping to stay informed. However, true productivity necessitates a focused effort to streamline our workflow, cutting through irrelevant noise. To manage information overload, individuals often look for a cognitive hack to save time, attempting to compress extensive knowledge into brief summaries. While this approach seems efficient, it risks diluting the depth of critical understanding. Mastery requires dedicated engagement rather than mere speed. Therefore, we should create opportunities to ventilate varying perspectives through careful analysis and rigorous discussion. Genuine wisdom is rarely achieved through superficial shortcuts; it demands profound contemplation.', 'c': 0, 'u': ''},
+      ],
+    };
+    await txn.insert(kTableArticle, {
+      'Article_ID': 'art_tech_read_03',
+      'Topic_ID': 'topic_tech_read',
+      'Word_Count': 2,
+      'Content_JSON': jsonEncode(techArticle3Content),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  });
+  print('[DB] _ensureSemanticReadingDataSeeded: 完成');
 }
 
 // ============================================================================
@@ -668,7 +947,9 @@ Future<Database> openHotDatabase(String dbDir) async {
       await db.execute(kCreateReviewLogSql);
       await db.execute(kCreateQuickScreenSql);
       await db.execute(kCreateUserSettingsSql);
+      await db.execute(kCreateWordBookSql);
       await _initDefaultSettings(db);
+      await _seedWordBooks(db);
       print('[DB] Hot onCreate 完成');
     },
     onUpgrade: (db, oldVersion, newVersion) async {
@@ -708,6 +989,90 @@ Future<void> _initDefaultSettings(Database db) async {
         conflictAlgorithm: ConflictAlgorithm.ignore);
   }
   await batch.commit(noResult: true);
+}
+
+/// 初始化默认词书数据
+/// 对应 SRS&SDD v2.1 附录 B：词书系统
+Future<void> _seedWordBooks(Database db) async {
+  final books = [
+    {
+      'Book_ID': 'cet4',
+      'Book_Name': 'CET-4',
+      'Book_Name_EN': 'College English Test Band 4',
+      'Word_Count': 3000,
+      'Tag_List': 'zk cet4',
+      'Description': '大学英语四级词汇',
+      'Sort_Order': 1,
+      'Is_Default': 1,
+    },
+    {
+      'Book_ID': 'cet6',
+      'Book_Name': 'CET-6',
+      'Book_Name_EN': 'College English Test Band 6',
+      'Word_Count': 2500,
+      'Tag_List': 'cet6',
+      'Description': '大学英语六级词汇',
+      'Sort_Order': 2,
+      'Is_Default': 1,
+    },
+    {
+      'Book_ID': 'kaoyan',
+      'Book_Name': '考研',
+      'Book_Name_EN': 'Graduate Entrance Exam',
+      'Word_Count': 5500,
+      'Tag_List': 'ky zk cet4 cet6',
+      'Description': '考研英语词汇（含四六级核心词）',
+      'Sort_Order': 3,
+      'Is_Default': 1,
+    },
+    {
+      'Book_ID': 'toefl',
+      'Book_Name': 'TOEFL',
+      'Book_Name_EN': 'Test of English as a Foreign Language',
+      'Word_Count': 8000,
+      'Tag_List': 'toefl',
+      'Description': '托福学术英语词汇',
+      'Sort_Order': 4,
+      'Is_Default': 0,
+    },
+    {
+      'Book_ID': 'ielts',
+      'Book_Name': 'IELTS',
+      'Book_Name_EN': 'International English Language Testing System',
+      'Word_Count': 6000,
+      'Tag_List': 'ielts',
+      'Description': '雅思学术英语词汇',
+      'Sort_Order': 5,
+      'Is_Default': 0,
+    },
+    {
+      'Book_ID': 'gre',
+      'Book_Name': 'GRE',
+      'Book_Name_EN': 'Graduate Record Examination',
+      'Word_Count': 10000,
+      'Tag_List': 'gre',
+      'Description': 'GRE 学术类研究生入学考试词汇',
+      'Sort_Order': 6,
+      'Is_Default': 0,
+    },
+    {
+      'Book_ID': 'kaoyan2027',
+      'Book_Name': '2027考研',
+      'Book_Name_EN': '2027 Graduate Entrance Exam',
+      'Word_Count': 6000,
+      'Tag_List': 'ky zk cet4 cet6',
+      'Description': '2027届考研英语词汇',
+      'Sort_Order': 0,
+      'Is_Default': 1,
+    },
+  ];
+
+  final batch = db.batch();
+  for (final book in books) {
+    batch.insert('WordBook', book, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+  await batch.commit(noResult: true);
+  print('[DB] _seedWordBooks 完成，已写入 ${books.length} 个词书');
 }
 
 /// 写入热库种子数据：新用户首次打开时，为 ROM 中的每个 Note 创建一张对应的 Card
@@ -825,6 +1190,67 @@ Future<NoteModel?> queryNoteByUuid(Database db, String uuid) async {
 Future<List<NoteModel>> queryAllNotes(Database db, {int? limit, int? offset}) async {
   final results = await db.query(kTableNote, limit: limit, offset: offset);
   return results.map((e) => NoteModel.fromMap(e)).toList();
+}
+
+// ============================================================================
+// Hot 数据查询（WordBook 相关）
+// ============================================================================
+
+/// 词书数据模型（SRS&SDD v2.1 附录 B）
+class WordBookModel {
+  final String bookId;
+  final String bookName;
+  final String bookNameEn;
+  final int wordCount;
+  final String tagList;
+  final String description;
+  final int sortOrder;
+  final bool isDefault;
+
+  WordBookModel({
+    required this.bookId,
+    required this.bookName,
+    required this.bookNameEn,
+    required this.wordCount,
+    required this.tagList,
+    required this.description,
+    required this.sortOrder,
+    required this.isDefault,
+  });
+
+  factory WordBookModel.fromMap(Map<String, dynamic> map) {
+    return WordBookModel(
+      bookId: map['Book_ID'] as String,
+      bookName: map['Book_Name'] as String,
+      bookNameEn: map['Book_Name_EN'] as String,
+      wordCount: map['Word_Count'] as int,
+      tagList: map['Tag_List'] as String,
+      description: map['Description'] as String,
+      sortOrder: map['Sort_Order'] as int,
+      isDefault: (map['Is_Default'] as int) == 1,
+    );
+  }
+}
+
+/// 查询所有词书（按 Sort_Order 排序）
+Future<List<WordBookModel>> queryAllWordBooks(Database db) async {
+  final results = await db.query(
+    'WordBook',
+    orderBy: 'Sort_Order ASC',
+  );
+  return results.map((e) => WordBookModel.fromMap(e)).toList();
+}
+
+/// 根据 Book_ID 查询词书
+Future<WordBookModel?> queryWordBookById(Database db, String bookId) async {
+  final results = await db.query(
+    'WordBook',
+    where: 'Book_ID = ?',
+    whereArgs: [bookId],
+    limit: 1,
+  );
+  if (results.isEmpty) return null;
+  return WordBookModel.fromMap(results.first);
 }
 
 // ============================================================================
@@ -1104,6 +1530,16 @@ Future<List<CardModel>> queryNewCards(Database db, {int? limit}) async {
   return results.map((e) => CardModel.fromMap(e)).toList();
 }
 
+/// 查询所有卡片（用于快速筛选回退：当没有新卡时显示所有卡）
+Future<List<CardModel>> queryAllCards(Database db, {int? limit}) async {
+  final results = await db.query(
+    kTableCard,
+    orderBy: 'Random_Sort_ID ASC',
+    limit: limit,
+  );
+  return results.map((e) => CardModel.fromMap(e)).toList();
+}
+
 /// 查询收藏卡片
 Future<List<CardModel>> queryFavoriteCards(Database db) async {
   final results = await db.query(
@@ -1266,6 +1702,29 @@ Future<void> markWordAsKnown(Database db, String uuid, int now) async {
   );
 }
 
+/// 切换单词的快速筛选状态（认识 ↔ 默认）
+/// known=true → 写入 Status=1
+/// known=false → 删除记录（恢复默认）
+Future<void> toggleWordScreenStatus(Database db, String uuid, bool known) async {
+  if (known) {
+    await db.insert(
+      kTableQuickScreen,
+      {
+        'Concept_UUID': uuid,
+        'Status': 1,
+        'Screen_Date': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  } else {
+    await db.delete(
+      kTableQuickScreen,
+      where: 'Concept_UUID = ?',
+      whereArgs: [uuid],
+    );
+  }
+}
+
 Future<int> queryKnownCount(Database db) async {
   final result = await db.rawQuery(
     'SELECT COUNT(*) as cnt FROM $kTableQuickScreen WHERE Status = 1',
@@ -1345,6 +1804,15 @@ Future<int> queryLogCountByDate(Database db, String localDateStr) async {
   final result = await db.rawQuery(
     'SELECT COUNT(*) FROM $kTableReviewLog WHERE Local_Date_Str = ?',
     [localDateStr],
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+/// 查询某时间戳区间内 Quick_Screen 中标记为 known 的单词数（每个单词只计一次）
+Future<int> queryTodayQuickKnownCount(Database db, int startOfDayMs, int endOfDayMs) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableQuickScreen WHERE Status = 1 AND Screen_Date >= ? AND Screen_Date < ?',
+    [startOfDayMs, endOfDayMs],
   );
   return Sqflite.firstIntValue(result) ?? 0;
 }

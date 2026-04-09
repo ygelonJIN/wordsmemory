@@ -12,23 +12,32 @@ class TreePageModel extends FlutterFlowModel<TreePageWidget> {
   @override
   void initState(BuildContext context) {
     updateOnChange = true;
+  }
+
+  @override
+  void onInitialized() {
     final rootId = widget?.rootId ?? 're';
     _loadData(rootId);
   }
 
   Future<void> _loadData(String rootId) async {
-    if (isLoading || _disposed) return;
+    if (_disposed) return;
+    final ctx = context;
+    if (ctx == null) return;
+
     try {
       updatePage(() => isLoading = true);
       final data = await BackendManager.instance.loadTreePageData(rootId);
-      if (!_disposed) {
-        updatePage(() {
-          pageData = data;
-          isLoading = false;
-        });
-      }
+      if (_disposed) return;
+      updatePage(() {
+        pageData = data;
+        isLoading = false;
+      });
     } catch (e) {
-      if (!_disposed) updatePage(() => isLoading = false);
+      if (!_disposed) {
+        updatePage(() => isLoading = false);
+        ctx.pushNamed(ErrorPageWidget.routeName);
+      }
     }
   }
 

@@ -136,7 +136,7 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
-                            context.pushNamed(ResultPageWidget.routeName);
+                            context.push('${ResultPageWidget.routePath}?fromQuickLearn=true');
                           },
                           child: Text(
                             'finish',
@@ -165,7 +165,7 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
-                            context.pushNamed(QuickLearnPage2Widget.routeName);
+                            await _model.nextPage();
                           },
                           child: Text(
                             'next',
@@ -217,7 +217,7 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
                     child: Padding(
                       padding: EdgeInsetsDirectional.fromSTEB(12.0, 5.0, 12.0, 0.0),
                       child: Text(
-                        _model.progressText,
+                        '快速筛选',
                         textAlign: TextAlign.start,
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
                               font: GoogleFonts.notoSans(
@@ -284,35 +284,35 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
         final item = _model.items[index];
         return Padding(
           padding: EdgeInsetsDirectional.fromSTEB(0.0, 10.0, 0.0, 10.0),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Align(
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Align(
                 alignment: AlignmentDirectional(-1.0, 0.0),
-                                      child: Padding(
+                child: Padding(
                   padding: EdgeInsetsDirectional.fromSTEB(10.0, 5.0, 10.0, 5.0),
-                                        child: Text(
+                  child: Text(
                     item.spelling,
-                                          style: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .override(
-                                                font: GoogleFonts.notoSans(
-                                                  fontWeight: FontWeight.w500,
+                    style: FlutterFlowTheme.of(context)
+                        .displayLarge
+                        .override(
+                          font: GoogleFonts.notoSans(
+                            fontWeight: FontWeight.w500,
                             fontStyle: FlutterFlowTheme.of(context)
-                                                          .displayLarge
-                                                          .fontStyle,
-                                                ),
-                                                fontSize: 18.0,
-                                                letterSpacing: 0.0,
+                                .displayLarge
+                                .fontStyle,
+                          ),
+                          fontSize: 18.0,
+                          letterSpacing: 0.0,
                           fontStyle: FlutterFlowTheme.of(context)
-                                                        .displayLarge
-                                                        .fontStyle,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                    Spacer(),
-                                    Align(
+                              .displayLarge
+                              .fontStyle,
+                        ),
+                  ),
+                ),
+              ),
+              Spacer(),
+              Align(
                 alignment: AlignmentDirectional(-1.0, 0.0),
                 child: InkWell(
                   splashColor: Colors.transparent,
@@ -320,30 +320,29 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
                   hoverColor: Colors.transparent,
                   highlightColor: Colors.transparent,
                   onTap: () async {
-                    await _model.markKnown(index);
+                    await _model.toggleKnown(index);
                   },
-                                        child: Text(
+                  child: Text(
                     item.isKnown ? '已认识' : '认识',
-                                          style: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .override(
-                                                font: GoogleFonts.notoSans(
-                                                  fontWeight: FontWeight.w500,
+                    style: FlutterFlowTheme.of(context)
+                        .displayLarge
+                        .override(
+                          font: GoogleFonts.notoSans(
+                            fontWeight: FontWeight.w500,
                             fontStyle: FlutterFlowTheme.of(context)
-                                                          .displayLarge
-                                                          .fontStyle,
-                                                ),
-                                                fontSize: 20.0,
-                                                letterSpacing: 0.0,
+                                .displayLarge
+                                .fontStyle,
+                          ),
+                          fontSize: 20.0,
+                          letterSpacing: 0.0,
                           fontStyle: FlutterFlowTheme.of(context)
-                                                        .displayLarge
-                                                        .fontStyle,
+                              .displayLarge
+                              .fontStyle,
                           decoration: TextDecoration.underline,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                        )),
+                ),
+              ),
+            ],
           ),
         );
       },

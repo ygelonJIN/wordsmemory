@@ -29,20 +29,48 @@ class TopicCatelogModel extends FlutterFlowModel<TopicCatelogWidget> {
   @override
   void initState(BuildContext context) {
     updateOnChange = true;
+    print('[TopicCatalog-Model] initState START, isLoading=$isLoading');
+    // 不再在这里调用 _loadData，改用 onInitialized 钩子
+    print('[TopicCatalog-Model] initState END');
+  }
+
+  @override
+  void onInitialized() {
+    // _context 已设置好，调用 _loadData
     _loadData();
   }
 
   Future<void> _loadData() async {
-    if (isLoading || _disposed) return;
+    print('[TopicCatalog-Model] _loadData ENTER, isLoading=$isLoading, _disposed=$_disposed');
+    if (_disposed) {
+      print('[TopicCatalog-Model] _loadData: _disposed=true, return early');
+      return;
+    }
     final ctx = context;
     if (ctx == null) return;
     try {
       updatePage(() => isLoading = true);
+
+      print('[TopicCatalog-Model] 开始 initialize() + 5s超时');
+      try {
+        await BackendManager.instance.initialize().timeout(
+          Duration(seconds: 5),
+          onTimeout: () => print('[TopicCatalog-Model] initialize() 超时！'),
+        );
+      } catch (e, st) {
+        print('[TopicCatalog-Model] initialize() 抛异常: $e\n$st');
+        rethrow;
+      }
+      print('[TopicCatalog-Model] initialize() 返回了');
+
+      print('[TopicCatalog-Model] 调用 loadTopics()...');
       final rawTopics = await BackendManager.instance.loadTopics();
+      print('[TopicCatalog-Model] loadTopics 返回 ${rawTopics.length} 个专题');
       final loaded = <TopicItemModel>[];
 
       for (final t in rawTopics) {
         final articles = await BackendManager.instance.topicManager.getArticlesByTopic(t.topicId);
+        print('[TopicCatalog] 专题 ${t.topicId} 含 ${articles.length} 篇文章: ${articles.map((a) => a.articleId)}');
         loaded.add(TopicItemModel(
           topicId: t.topicId,
           topicName: t.topicName,
@@ -58,7 +86,8 @@ class TopicCatelogModel extends FlutterFlowModel<TopicCatelogWidget> {
           isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      print('[TopicCatalog] _loadData 异常: $e\n$st');
       if (!_disposed) updatePage(() => isLoading = false);
     }
   }

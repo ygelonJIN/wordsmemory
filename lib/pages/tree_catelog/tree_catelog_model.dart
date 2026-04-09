@@ -27,24 +27,26 @@ class TreeCatelogModel extends FlutterFlowModel<TreeCatelogWidget> {
   @override
   void initState(BuildContext context) {
     updateOnChange = true;
+  }
+
+  @override
+  void onInitialized() {
     _loadData();
   }
 
   /// 从 BackendManager 加载分组词根数据
   Future<void> _loadData() async {
-    if (isLoading || _disposed) return;
+    if (_disposed) return;
     final ctx = context;
     if (ctx == null) return;
 
     try {
-      // BackendManager.instance.treeManager.getAllGroups() 返回 ['A', 'C', 'D', 'R', 'T']
       final groupNames = await BackendManager.instance.treeManager.getAllGroups();
 
       final loadedGroups = <TreeGroupModel>[];
       final loadedFlatRoots = <TreeRootDisplayModel>[];
 
       for (final group in groupNames) {
-        // 取出该分组下所有词根
         final roots = await BackendManager.instance.loadTreeRootsForGroup(group);
 
         loadedGroups.add(TreeGroupModel(
@@ -63,7 +65,10 @@ class TreeCatelogModel extends FlutterFlowModel<TreeCatelogWidget> {
         });
       }
     } catch (e) {
-      if (!_disposed) updatePage(() => isLoading = false);
+      if (!_disposed) {
+        updatePage(() => isLoading = false);
+        ctx.pushNamed(ErrorPageWidget.routeName);
+      }
     }
   }
 
@@ -85,7 +90,6 @@ class TreeCatelogModel extends FlutterFlowModel<TreeCatelogWidget> {
 
   /// 导航到指定词根的结构树详情页
   void navigateToRoot(String rootId) {
-    // 用 go() 跳转到 /treePage?rootId=xxx，TreePageWidget 从 widget.rootId 读取
     context?.go('/treePage?rootId=$rootId');
   }
 

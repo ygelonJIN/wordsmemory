@@ -3,6 +3,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'tree_page_model.dart';
 import 'package:demo1red/backend/provider.dart';
@@ -254,26 +255,41 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                                         await BackendManager.instance.visitTreeWord(word.conceptUuid);
                                         context.pushNamed(RandomLearnPageWidget.routeName);
                                       },
-                                      child: Text(
-                                        word.renderString,
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.inter(
-                                                fontWeight: FontWeight.w500,
-                                                fontStyle: FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 4.0),
+                                        child: RichText(
+                                          text: TextSpan(
+                                            children: [
+                                              // 单词部分：带下划线，点击时触发跳转
+                                              TextSpan(
+                                                text: word.spelling,
+                                                style: GoogleFonts.notoSans(
+                                                  fontSize: 16.0,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.black,
+                                                  decoration: TextDecoration.underline,
+                                                  decorationColor: Colors.black,
+                                                  decorationThickness: 1.5,
+                                                ),
+                                                recognizer: TapGestureRecognizer()
+                                                  ..onTap = () async {
+                                                    await BackendManager.instance.visitTreeWord(word.conceptUuid);
+                                                    context.pushNamed(RandomLearnPageWidget.routeName);
+                                                  },
                                               ),
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                              lineHeight: 2.5,
-                                              decoration: TextDecoration.underline,
-                                            ),
+                                              // 等号+词根组合+词根含义+最终中文
+                                              TextSpan(
+                                                text: '=${word.compoundForm}=${word.compoundMeaning}=${word.finalMeaning}',
+                                                style: GoogleFonts.notoSans(
+                                                  fontSize: 16.0,
+                                                  fontWeight: FontWeight.w400,
+                                                  color: Colors.black,
+                                                  decoration: TextDecoration.none,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     );
                                   },

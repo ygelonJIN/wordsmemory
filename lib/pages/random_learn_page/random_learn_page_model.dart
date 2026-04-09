@@ -3,6 +3,8 @@ import '/index.dart';
 import 'random_learn_page_widget.dart' show RandomLearnPageWidget;
 import 'package:flutter/material.dart';
 import 'package:demo1red/backend/provider.dart';
+import 'package:demo1red/backend/tts_service.dart';
+import 'package:demo1red/backend/tts_service.dart';
 
 class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
   RandomLearnPageData? cardData;
@@ -67,11 +69,22 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
       final pendingRating = session?.pendingRating;
       if (pendingRating == null) return; // No pending rating, should not happen
       await BackendManager.instance.confirmPendingRating(pendingRating);
+
+      // 从语义阅读页点词进来的单卡会话：学完后返回同一篇文章
+      if (session != null && session.canResumeTopicReading) {
+        final articleId = session.resumeArticleId ?? 'art_tech_read_01';
+        final topicId = session.resumeTopicId ?? 'topic_tech_read';
+        print('[Learn] 回流到阅读页 articleId=$articleId');
+        ctx.go('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
+        return;
+      }
+
+      // 普通学习流程
       if (BackendManager.instance.hasSession &&
           BackendManager.instance.hasNextCard) {
         ctx.pushNamed(RandomAskPageWidget.routeName);
       } else {
-        ctx.pushNamed(ResultPageWidget.routeName);
+        ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true');
       }
     } catch (e) {
       if (!_disposed) ctx.pushNamed(ErrorPageWidget.routeName);
@@ -87,6 +100,17 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
       updatePage(() => isFavorite = !isFavorite);
     } catch (e) {
       if (!_disposed) ctx.pushNamed(ErrorPageWidget.routeName);
+    }
+  }
+
+  /// 播放单词发音（SRS&SDD v2.1 第 7.1 节）
+  Future<void> speakWord() async {
+    if (cardData == null) return;
+    final word = cardData!.spelling;
+    if (word.isEmpty) return;
+    final ok = await TTSService.instance.speak(word);
+    if (!ok && !_disposed) {
+      // TTS 不可用，静默失败（不打断学习流程）
     }
   }
 

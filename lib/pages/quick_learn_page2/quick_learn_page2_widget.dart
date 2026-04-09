@@ -162,33 +162,42 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                           ),
                         ),
                         Spacer(),
-                        Text(
-                          'next',
-                          style:
-                              FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.notoSans(
-                                      fontWeight: FontWeight.w600,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontStyle,
-                                    ),
-                                    fontSize: 18.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.w600,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontStyle,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                        ),
-                        Spacer(),
                         InkWell(
                           splashColor: Colors.transparent,
                           focusColor: Colors.transparent,
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
-                            context.pushNamed(ResultPageWidget.routeName);
+                            await _model.nextPage();
+                          },
+                          child: Text(
+                            'next',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.notoSans(
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                                  fontSize: 18.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                  decoration: TextDecoration.underline,
+                                ),
+                          ),
+                        ),
+                        InkWell(
+                          splashColor: Colors.transparent,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () async {
+                            context.push('${ResultPageWidget.routePath}?fromQuickLearn=true');
                           },
                           child: Text(
                             'finish',
@@ -310,7 +319,7 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                                                 hoverColor: Colors.transparent,
                                                 highlightColor: Colors.transparent,
                                                 onTap: () async {
-                                                  await _model.markKnown(index);
+                                                  await _model.toggleKnown(index);
                                                 },
                                                 child: Text(
                                                   item.spellingText,

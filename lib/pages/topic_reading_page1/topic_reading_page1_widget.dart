@@ -12,9 +12,11 @@ class TopicReadingPage1Widget extends StatefulWidget {
   const TopicReadingPage1Widget({
     super.key,
     this.articleId,
+    this.topicId,
   });
 
   final String? articleId;
+  final String? topicId;
 
   static String routeName = 'TopicReadingPage1';
   static String routePath = '/topicReadingPage1';
@@ -24,19 +26,41 @@ class TopicReadingPage1Widget extends StatefulWidget {
       _TopicReadingPage1WidgetState();
 }
 
-class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> {
+class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with WidgetsBindingObserver {
   late TopicReadingPage1Model _model;
+  String? _lastArticleId;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _model = createModel(context, () => TopicReadingPage1Model());
+    _lastArticleId = widget.articleId;
+  }
+
+  @override
+  void didUpdateWidget(TopicReadingPage1Widget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当 articleId 变化时（从 Learn 返回后重新加载同一页面），刷新数据
+    if (widget.articleId != _lastArticleId) {
+      _lastArticleId = widget.articleId;
+      _model.refreshData(widget.articleId ?? 'art_tech_read_01');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 当应用从后台恢复或页面重新获得焦点时刷新
+    if (state == AppLifecycleState.resumed) {
+      _model.refreshData(widget.articleId ?? 'art_tech_read_01');
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _model.dispose();
 
     super.dispose();
@@ -106,111 +130,104 @@ class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> {
                   Padding(
                     padding:
                         EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
-                    child: Container(
-                      height: 30.0,
-                      child: Stack(
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                onTap: () async {
-                                  context
-                                      .pushNamed(TopicCatelogWidget.routeName);
-                                },
-                                child: Text(
-                                  'catelog',
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.notoSans(
-                                          fontWeight: FontWeight.w600,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        fontSize: 18.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.w600,
-                                        fontStyle: FlutterFlowTheme.of(context)
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        InkWell(
+                          splashColor: Colors.transparent,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () async {
+                            context
+                                .pushNamed(TopicCatelogWidget.routeName);
+                          },
+                          child: Text(
+                            'catelog',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.notoSans(
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle:
+                                        FlutterFlowTheme.of(context)
                                             .bodyMedium
                                             .fontStyle,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                ),
-                              ),
-                              Spacer(),
-                              InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                onTap: () async {
-                                  context.safePop();
-                                },
-                                child: Text(
-                                  'back',
-                                  style: FlutterFlowTheme.of(context)
+                                  ),
+                                  fontSize: 18.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w600,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        fontSize: 18.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.w600,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                        decoration: TextDecoration.underline,
-                                      ),
+                                      .fontStyle,
+                                  decoration: TextDecoration.underline,
                                 ),
-                              ),
-                              Spacer(),
-                              InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                onTap: () async {
-                                  context.pushNamed(
-                                      TopicReadingPage2Widget.routeName);
-                                },
-                                child: Text(
-                                  'next',
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w600,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        fontSize: 18.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.w600,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                ),
-                              ),
-                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        Spacer(),
+                        InkWell(
+                          splashColor: Colors.transparent,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () async {
+                            _model.onFinish();
+                          },
+                          child: Text(
+                            'finish',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.notoSans(
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle:
+                                        FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontStyle,
+                                  ),
+                                  fontSize: 18.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                  decoration: TextDecoration.underline,
+                                ),
+                          ),
+                        ),
+                        Spacer(),
+                        if (_model.hasNext)
+                          InkWell(
+                            splashColor: Colors.transparent,
+                            focusColor: Colors.transparent,
+                            hoverColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            onTap: () async {
+                              _model.onNextArticle();
+                            },
+                            child: Text(
+                              'next',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w600,
+                                      fontStyle:
+                                          FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .fontStyle,
+                                    ),
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   Align(

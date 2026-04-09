@@ -27,15 +27,19 @@ class RandomAskPageModel extends FlutterFlowModel<RandomAskPageWidget> {
     try {
       updatePage(() => isLoading = true);
       var data = await BackendManager.instance.loadRandomAskCard();
+      // 仅当会话为空时才创建全局学习会话（避免覆盖从阅读页注入的单卡会话）
       if (data == null) {
-        await BackendManager.instance.createLearnSession();
-        data = await BackendManager.instance.loadRandomAskCard();
+        final hasSession = BackendManager.instance.hasSession;
+        if (!hasSession) {
+          await BackendManager.instance.createLearnSession();
+          data = await BackendManager.instance.loadRandomAskCard();
+        }
       }
       if (_disposed) return;
       updatePage(() {
         if (data == null) {
           hasError = true;
-          ctx.pushNamed(ResultPageWidget.routeName);
+          ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true');
         } else {
           cardData = data;
           hasError = false;

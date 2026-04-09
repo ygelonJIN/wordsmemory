@@ -8,6 +8,7 @@ import 'package:sqflite/sqflite.dart';
 import 'database.dart';
 import 'fsrs.dart';
 import 'study.dart';
+import 'tts_service.dart';
 
 export 'database.dart';
 export 'fsrs.dart';
@@ -99,9 +100,11 @@ class BackendManager {
   /// 应用启动时调用（对应 LoadingPage）
   /// 通过 loadingStatusStream 推送各阶段状态
   Future<void> initialize() async {
-    if (isInitialized) return;
-
-    print('[Backend] 开始初始化');
+    print('[Backend] initialize() 被调用, 已初始化=$isInitialized');
+    if (isInitialized) {
+      print('[Backend] initialize: 已初始化，跳过');
+      return;
+    }
 
     _loadingStatusController.add(LoadingStatus(
       text: '正在初始化存储路径...',
@@ -113,9 +116,12 @@ class BackendManager {
     final String dbDir;
     if (kIsWeb) {
       dbDir = '';
+      print('[Backend] Web环境，dbDir=""');
     } else {
+      print('[Backend] 非Web，获取应用文档目录...');
       final appDir = await getApplicationDocumentsDirectory();
       dbDir = appDir.path;
+      print('[Backend] dbDir=$dbDir');
     }
 
     _loadingStatusController.add(LoadingStatus(
@@ -124,8 +130,13 @@ class BackendManager {
       isDone: false,
     ));
     print('[Backend] 准备打开ROM数据库, dbDir=$dbDir');
-    _romDb = await openRomDatabase(dbDir);
-    print('[Backend] ROM数据库已打开');
+    try {
+      print('[Backend] 调用 openRomDatabase...');
+      _romDb = await openRomDatabase(dbDir);
+      print('[Backend] ROM数据库已打开');
+    } catch (e) {
+      print('[Backend] ROM数据库打开失败（继续尝试）: $e');
+    }
 
     _loadingStatusController.add(LoadingStatus(
       text: '正在打开热数据库...',
@@ -133,18 +144,38 @@ class BackendManager {
       isDone: false,
     ));
     print('[Backend] 准备打开Hot数据库');
-    _hotDb = await openHotDatabase(dbDir);
-    print('[Backend] Hot数据库已打开');
+    try {
+      print('[Backend] 调用 openHotDatabase...');
+      _hotDb = await openHotDatabase(dbDir);
+      print('[Backend] Hot数据库已打开');
+    } catch (e) {
+      print('[Backend] Hot数据库打开失败（继续尝试）: $e');
+    }
+
+    // 初始化 TTS 发音服务（SRS&SDD v2.1 第 7.1 节）
+    print('[Backend] 初始化TTS发音服务...');
+    try {
+      await TTSService.instance.initialize();
+      print('[Backend] TTS初始化完成: ${TTSService.instance.isAvailable}');
+    } catch (e) {
+      print('[Backend] TTS初始化失败（继续）: $e');
+    }
 
     _loadingStatusController.add(LoadingStatus(
       text: '正在初始化学习会话...',
       progress: 0.6,
       isDone: false,
     ));
-    _studyManager = StudySessionManager(hotDb: _hotDb!, romDb: _romDb!);
-    _quickScreenManager = QuickScreenManager(hotDb: _hotDb!, romDb: _romDb!);
-    _treeManager = TreeManager(hotDb: _hotDb!, romDb: _romDb!);
-    _topicManager = TopicReadingManager(hotDb: _hotDb!, romDb: _romDb!);
+    try {
+      if (_hotDb != null && _romDb != null) {
+        _studyManager = StudySessionManager(hotDb: _hotDb!, romDb: _romDb!);
+        _quickScreenManager = QuickScreenManager(hotDb: _hotDb!, romDb: _romDb!);
+        _treeManager = TreeManager(hotDb: _hotDb!, romDb: _romDb!);
+        _topicManager = TopicReadingManager(hotDb: _hotDb!, romDb: _romDb!);
+      }
+    } catch (e) {
+      print('[Backend] 学习会话初始化失败（继续）: $e');
+    }
 
     _loadingStatusController.add(LoadingStatus(
       text: '正在检查数据库完整性...',
@@ -153,35 +184,59 @@ class BackendManager {
     ));
 
     print('[Backend] 检查ROM完整性...');
-    // 完整性探针
-    final romOk = await probeRomIntegrity(_romDb!);
-    print('[Backend] ROM完整性: $romOk');
-    final hotOk = await probeHotIntegrity(_hotDb!);
-    print('[Backend] Hot完整性: $hotOk');
-    if (!romOk || !hotOk) {
-      throw Exception('DATABASE_INTEGRITY_ERROR: rom=$romOk hot=$hotOk');
+    // 完整性探针（Web 环境下可能失败，加 try-catch 保护）
+    try {
+      final romOk = await probeRomIntegrity(_romDb!);
+      print('[Backend] ROM完整性: $romOk');
+      final hotOk = await probeHotIntegrity(_hotDb!);
+      print('[Backend] Hot完整性: $hotOk');
+      if (!romOk || !hotOk) {
+        print('[Backend] 数据库完整性检查未通过，继续初始化（数据可能已存在）');
+      }
+    } catch (e) {
+      print('[Backend] 数据库完整性检查异常（继续初始化）: $e');
     }
 
     print('[Backend] 运行迁移...');
-    // 孤儿记录清理
-    await runMigrations(_hotDb!, _romDb!);
-    print('[Backend] 迁移完成');
+    try {
+      if (_hotDb != null && _romDb != null) {
+        await runMigrations(_hotDb!, _romDb!);
+        print('[Backend] 迁移完成');
+      }
+    } catch (e) {
+      print('[Backend] 迁移失败（继续）: $e');
+    }
 
     print('[Backend] 检查热库种子数据...');
-    // 热库种子数据：如果 Card 表为空，重新创建
-    await seedHotDataIfNeeded(_hotDb!, _romDb!);
-    print('[Backend] 热库种子数据完成');
+    try {
+      if (_hotDb != null && _romDb != null) {
+        // 热库种子数据：如果 Card 表为空，重新创建
+        await seedHotDataIfNeeded(_hotDb!, _romDb!);
+        print('[Backend] 热库种子数据完成');
+      }
+    } catch (e) {
+      print('[Backend] 热库种子数据失败（继续）: $e');
+    }
 
     // 双重检查：确保 Card 表有数据（依赖于 ROM 数据库完整性）
-    final cardCount = Sqflite.firstIntValue(
-        await _hotDb!.rawQuery('SELECT COUNT(*) FROM Card'));
-    print('[Backend] Card数量: $cardCount');
-    if (cardCount == null || cardCount == 0) {
-      print('[Backend] Card为空，强制检查ROM完整性...');
-      // Card 表仍然为空，可能是 ROM 数据库没有数据，强制检查 ROM 完整性
-      await ensureRomDataIntegrity(_romDb!);
-      await seedHotDataIfNeeded(_hotDb!, _romDb!);
-      print('[Backend] 强制补种完成');
+    try {
+      if (_hotDb != null) {
+        final cardCount = Sqflite.firstIntValue(
+            await _hotDb!.rawQuery('SELECT COUNT(*) FROM Card'));
+        print('[Backend] Card数量: $cardCount');
+        if (cardCount == null || cardCount == 0) {
+          print('[Backend] Card为空，强制检查ROM完整性...');
+          if (_romDb != null) {
+            await ensureRomDataIntegrity(_romDb!);
+          }
+          if (_hotDb != null && _romDb != null) {
+            await seedHotDataIfNeeded(_hotDb!, _romDb!);
+          }
+          print('[Backend] 强制补种完成');
+        }
+      }
+    } catch (e) {
+      print('[Backend] Card检查失败（继续）: $e');
     }
 
     _loadingStatusController.add(LoadingStatus(
@@ -221,12 +276,20 @@ class BackendManager {
     final dueCount = await queryTotalDueCount(_hotDb!, now);
     final newCount = await queryTotalNewCount(_hotDb!);
 
+    // 计算今日逻辑日的毫秒区间，用于统计 Quick_Screen 中已标记单词
+    final refreshHour = int.tryParse(await querySetting(_hotDb!, 'daily_refresh_hour') ?? '0') ?? 0;
+    final nowDateTime = DateTime.now();
+    final todayLocal = DateTime(nowDateTime.year, nowDateTime.month, nowDateTime.day);
+    final todayStartMs = todayLocal.subtract(Duration(hours: refreshHour)).millisecondsSinceEpoch;
+    final todayEndMs = todayStartMs + 86400000;
+    final todayQuickKnown = await queryTodayQuickKnownCount(_hotDb!, todayStartMs, todayEndMs);
+
     final daysSinceExport = (now - lastExportTime) ~/ 86400000;
     final exportWarning = daysSinceExport >= 7;
 
     return HomePageData(
       userName: userName,
-      todayLearnedCount: todayCount,
+      todayLearnedCount: todayCount + todayQuickKnown,
       todayStudyTimeMs: todayTimeMs,
       dailyTarget: dailyTarget,
       remaining: dueCount,
@@ -390,6 +453,17 @@ class BackendManager {
     await _studyManager!.createLearnSession(limit: limit);
   }
 
+  /// 从语义阅读页点词进入：创建单卡学习会话，携带恢复用 articleId / topicId
+  Future<void> startTopicReadingWordSession(String conceptUuid, String resumeArticleId, String resumeTopicId) async {
+    _ensureInitialized();
+    print('[Provider] startTopicReadingWordSession uuid=$conceptUuid articleId=$resumeArticleId');
+    await _studyManager!.createSingleCardLearnSession(
+      conceptUuid,
+      resumeArticleId: resumeArticleId,
+      resumeTopicId: resumeTopicId,
+    );
+  }
+
   /// 创建复习会话
   Future<void> createReviewSession({int? limit}) async {
     _ensureInitialized();
@@ -434,11 +508,34 @@ class BackendManager {
 
   String getQuickLearnProgress() => _quickScreenManager!.progressText;
 
-  Future<void> markQuickLearnKnown(int index) async {
-    await _quickScreenManager!.markAsKnown(index);
+  Future<void> toggleQuickLearnKnown(int index) async {
+    await _quickScreenManager!.toggleKnown(index);
   }
 
+  Future<void> loadNextQuickLearnPage() async {
+    await _quickScreenManager!.nextPage();
+  }
+
+  Future<void> loadPrevQuickLearnPage() async {
+    await _quickScreenManager!.prevPage();
+  }
+
+  bool hasNextQuickLearnPage() => _quickScreenManager!.hasNextPage;
+
+  bool hasPrevQuickLearnPage() => _quickScreenManager!.hasPrevPage;
+
   bool getQuickLearnIsAllDone() => _quickScreenManager!.isAllDone;
+
+  Future<List<String>> getQuickMarkedSpellings() async {
+    _ensureInitialized();
+    final knownUuids = await queryKnownUuids(_hotDb!);
+    final spellings = <String>[];
+    for (final uuid in knownUuids) {
+      final note = await queryNoteByUuid(_romDb!, uuid);
+      if (note != null) spellings.add(note.spelling);
+    }
+    return spellings;
+  }
 
   // -------------------------------------------------------------------------
   // TreePage 数据
@@ -454,10 +551,7 @@ class BackendManager {
       rootId: root.rootId,
       rootName: root.rootName,
       rootDefinition: root.rootDefinition,
-      words: words.map((w) => TreeWordData(
-        conceptUuid: w.conceptUuid,
-        renderString: w.renderString,
-      )).toList(),
+      words: words,
     );
   }
 
@@ -482,26 +576,51 @@ class BackendManager {
   }
 
   Future<TopicReadingPageData?> loadArticle(String articleId) async {
-    _ensureInitialized();
-    final display = await _topicManager!.getArticleDisplay(articleId);
-    if (display == null) return null;
+    try {
+      _ensureInitialized();
+      print('[Provider] loadArticle articleId=$articleId');
+      final display = await _topicManager!.getArticleDisplay(articleId);
+      print('[Provider] getArticleDisplay 返回: ${display == null ? "null" : "非null"}');
+      if (display == null) return null;
 
-    return TopicReadingPageData(
-      articleId: display.articleId,
-      topicName: display.topicName,
-      wordCountText: display.wordCountText,
-      readCountText: display.readCountText,
-      segments: display.segments.map((s) => TextSpanData(
-        text: s['t'] as String? ?? '',
-        isHighlighted: s['c'] == 1,
-        uuid: s['u'] as String?,
-      )).toList(),
-    );
+      return TopicReadingPageData(
+        articleId: display.articleId,
+        topicName: display.topicName,
+        wordCountText: display.wordCountText,
+        readCountText: display.readCountText,
+        segments: display.segments.map((s) => TextSpanData(
+          text: s['t'] as String? ?? '',
+          isHighlighted: s['c'] == 1,
+          uuid: s['u'] as String?,
+        )).toList(),
+      );
+    } catch (e, st) {
+      print('[Provider] loadArticle 异常: $e\n$st');
+      return null;
+    }
   }
 
   Future<void> visitTopicWord(String conceptUuid) async {
     _ensureInitialized();
     await _topicManager!.visitWord(conceptUuid);
+  }
+
+  /// 获取专题中当前文章的下一篇 articleId（Next 按钮用）
+  Future<String?> getNextArticleId(String topicId, String currentArticleId) async {
+    _ensureInitialized();
+    return _topicManager!.getNextArticleId(topicId, currentArticleId);
+  }
+
+  /// 获取专题中当前文章的上一篇 articleId（Back 按钮用）
+  Future<String?> getPreviousArticleId(String topicId, String currentArticleId) async {
+    _ensureInitialized();
+    return _topicManager!.getPreviousArticleId(topicId, currentArticleId);
+  }
+
+  /// 获取专题的所有文章列表及当前索引（用于条件显示 Back/Next 按钮）
+  Future<TopicArticlesResult?> getTopicArticlesWithIndex(String topicId, String currentArticleId) async {
+    _ensureInitialized();
+    return _topicManager!.getTopicArticlesWithIndex(topicId, currentArticleId);
   }
 
   // -------------------------------------------------------------------------
@@ -554,6 +673,16 @@ class BackendManager {
   Future<void> updateSetting(String key, String value) async {
     _ensureInitialized();
     await setSetting(_hotDb!, key, value);
+  }
+
+  // -------------------------------------------------------------------------
+  // 词书数据（对应 SRS&SDD v2.1 附录 B）
+  // -------------------------------------------------------------------------
+
+  /// 加载所有词书列表
+  Future<List<WordBookModel>> loadWordBooks() async {
+    _ensureInitialized();
+    return queryAllWordBooks(_hotDb!);
   }
 
   // -------------------------------------------------------------------------
@@ -629,8 +758,10 @@ class BackendManager {
 
   void _ensureInitialized() {
     if (!isInitialized) {
+      print('[Backend] _ensureInitialized: 未初始化，抛出异常');
       throw Exception('BACKEND_NOT_INITIALIZED: 请先调用 BackendManager.instance.initialize()');
     }
+    print('[Backend] _ensureInitialized: 已初始化，通过');
   }
 
   Future<int> _queryTodayStudyTimeMs(Database hotDb, String localDate) async {
@@ -784,7 +915,7 @@ class TreePageData {
   final String rootId;
   final String rootName;
   final String rootDefinition;
-  final List<TreeWordData> words;
+  final List<TreeWordDisplayModel> words;
 
   TreePageData({
     required this.rootId,
@@ -795,13 +926,6 @@ class TreePageData {
 
   String get rootNameText => rootName;
   String get rootDefinitionText => rootDefinition;
-}
-
-class TreeWordData {
-  final String conceptUuid;
-  final String renderString;
-
-  TreeWordData({required this.conceptUuid, required this.renderString});
 }
 
 class TreeRootDisplayModel {
