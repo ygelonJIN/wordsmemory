@@ -29,9 +29,9 @@ class RandomLearnPage2Model extends FlutterFlowModel<RandomLearnPage2Widget> {
       final data = await BackendManager.instance.loadRandomLearn2Card();
       if (_disposed) return;
       updatePage(() {
-        if (data == null) {
+          if (data == null) {
           hasError = true;
-        ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true');
+        ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true&learnedSpellings=${Uri.encodeComponent(jsonEncode(<String>[]))}');
         } else {
           cardData = data;
           isFavorite = data.isFavorite;
@@ -60,10 +60,15 @@ class RandomLearnPage2Model extends FlutterFlowModel<RandomLearnPage2Widget> {
       // 从语义阅读页点词进来的单卡会话：学完后返回同一篇文章
       final session = BackendManager.instance.getStudySession();
       if (session != null && session.canResumeTopicReading) {
+        // 标记该词已在专题阅读中学过，下次进入文章时 readCount 会包含此卡
+        final uuid = session.currentCard?.conceptUuid;
+        if (uuid != null) {
+          await BackendManager.instance.markTopicWordRead(uuid);
+        }
         final articleId = session.resumeArticleId ?? 'art_tech_read_01';
         final topicId = session.resumeTopicId ?? 'topic_tech_read';
         print('[Learn2] 回流到阅读页 articleId=$articleId');
-        ctx.go('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
+        ctx.push('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
         return;
       }
 

@@ -12,6 +12,17 @@ export 'serialization_util.dart';
 
 const kTransitionInfoKey = '__transition_info__';
 
+/// Query / extras may expose list params as `List<dynamic>` (e.g. JSArray on web).
+/// [ResultPageWidget] expects `List<String>?`.
+List<String>? coerceLearnedSpellingsParam(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is List<String>) return raw;
+  if (raw is List) {
+    return List<String>.from(raw.map((e) => e.toString()));
+  }
+  return null;
+}
+
 GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 GoRouter? appRouter;
 
@@ -44,9 +55,6 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: TreePageWidget.routeName,
           path: TreePageWidget.routePath,
-          asyncParams: {
-            'rootId': (rootId) async => rootId,
-          },
           builder: (context, params) => TreePageWidget(
             rootId: params.getParam<String>('rootId', ParamType.String),
           ),
@@ -88,6 +96,11 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => ResultPageWidget(
             fromQuickLearn: params.getParam<bool>('fromQuickLearn', ParamType.bool),
             fromRandomLearn: params.getParam<bool>('fromRandomLearn', ParamType.bool),
+            fromSemanticReading: params.getParam<bool>('fromSemanticReading', ParamType.bool),
+            fromTreeLearning: params.getParam<bool>('fromTreeLearning', ParamType.bool),
+            learnedSpellings: coerceLearnedSpellingsParam(
+              params.getParam<String>('learnedSpellings', ParamType.String, isList: true),
+            ),
           ),
         ),
         FFRoute(

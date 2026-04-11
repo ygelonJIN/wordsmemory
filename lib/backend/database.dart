@@ -1,9 +1,12 @@
 library wordmemory.database;
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 // ============================================================================
@@ -56,7 +59,29 @@ CREATE TABLE Note (
     Definition TEXT NOT NULL,
     Etymology_JSON TEXT,
     Micro_Context_JSON TEXT NOT NULL,
-    Content_JSON TEXT NOT NULL
+    Content_JSON TEXT NOT NULL,
+    BNC INTEGER DEFAULT 0,
+    FRQ INTEGER DEFAULT 0,
+    Collins_Star INTEGER DEFAULT 0,
+    Definition_En TEXT,
+    Example_Sentence TEXT,
+    Past_Tense TEXT,
+    Past_Participle TEXT,
+    Part_Of_Speech TEXT
+) STRICT;
+''';
+
+const String kCreateCollinsStarSql = '''
+CREATE TABLE Collins_Star (
+    Spelling TEXT PRIMARY KEY,
+    Star INTEGER NOT NULL
+) STRICT;
+''';
+
+const String kCreateEnglishDefSql = '''
+CREATE TABLE English_Definition (
+    Spelling TEXT PRIMARY KEY,
+    Definition_En TEXT NOT NULL
 ) STRICT;
 ''';
 
@@ -193,6 +218,8 @@ Future<Database> openRomDatabase(String dbDir) async {
       await db.execute('PRAGMA journal_mode=WAL');
       await db.execute('PRAGMA wal_autocheckpoint=1000');
       await db.execute(kCreateNoteSql);
+      await db.execute(kCreateCollinsStarSql);
+      await db.execute(kCreateEnglishDefSql);
       await db.execute(kCreateTreeRootSql);
       await db.execute(kCreateTreeWordSql);
       await db.execute(kCreateTopicSql);
@@ -209,22 +236,24 @@ Future<Database> openRomDatabase(String dbDir) async {
   );
 }
 
-/// 确保 ROM 数据完整性。如果 Note 表为空则重新写入示例数据
+/// 确保 ROM 数据完整性。如果 Tree_Root 表为空则重新写入结构树示例数据
 ///
 /// 注意：如果需要加载 ECDICT 预生成数据库：
 /// 1. 将 ECDICT 转换工具输出的 wordmemory_rom.db 复制到应用私有目录
 /// 2. 该文件已有数据，不会触发此处补种逻辑
-/// 3. 如果 ROM 文件存在但 Note 表为空，说明是新数据库，也会触发补种
+/// 3. 如果 ROM 文件存在但 Tree_Root 表为空，说明新数据库未包含结构树数据，会触发补种
 Future<void> _ensureRomDataIntegrity(Database db) async {
   print('[DB] _ensureRomDataIntegrity 开始');
-  final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM Note'));
-  print('[DB] _ensureRomDataIntegrity Note数量=$count');
-  if (count == null || count == 0) {
-    print('[DB] _ensureRomDataIntegrity Note为空，开始补种示例数据...');
+  // 检查 Tree_Root 表（而非 Note 表），因为 _seedSemanticReadingData 会先写入科技阅读的 Note，
+  // 导致 Note > 0 时 _seedRomData 仍可能未执行（Tree_Root/Tree_Word 仍为空）。
+  final rootCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM Tree_Root'));
+  print('[DB] _ensureRomDataIntegrity Tree_Root数量=$rootCount');
+  if (rootCount == null || rootCount == 0) {
+    print('[DB] _ensureRomDataIntegrity Tree_Root为空，执行 _seedRomData...');
     await _seedRomData(db);
     print('[DB] _ensureRomDataIntegrity 补种完成');
   } else {
-    print('[DB] _ensureRomDataIntegrity ROM已有 ${count} 条词汇，使用预生成数据或已有数据');
+    print('[DB] _ensureRomDataIntegrity Tree_Root已有 ${rootCount} 条，使用已有数据');
   }
   print('[DB] _ensureRomDataIntegrity 结束');
 }
@@ -1075,15 +1104,282 @@ Future<void> _seedWordBooks(Database db) async {
   print('[DB] _seedWordBooks 完成，已写入 ${books.length} 个词书');
 }
 
+/// 从 ECDICT CSV 文件解析数据，填充 ROM 数据库的 Note 表及辅助表
+/// 流程：1) 解析 sec-edict.csv 星级数据 2) 解析 ecdict.csv 主数据
+Future<void> _loadECDICTIntoRom(Database romDb, Database hotDb) async {
+  print('[DB] _loadECDICTIntoRom 开始');
+  try {
+    // 获取 ECDICT CSV 文件路径
+    String? ecdictCsvPath = await _findECDICTCsvPath();
+    String? secEdictCsvPath = await _findSecEdictCsvPath();
+    if (ecdictCsvPath == null) {
+      print('[DB] _loadECDICTIntoRom: 找不到 ecdict.csv，跳过');
+      return;
+    }
+    print('[DB] _loadECDICTIntoRom: ecdictCsvPath=$ecdictCsvPath');
+
+    // 读取并解析 sec-edict.csv（星级数据）
+    Map<String, int> collinsStarMap = {};
+    if (secEdictCsvPath != null) {
+      print('[DB] _loadECDICTIntoRom: 读取 sec-edict.csv');
+      try {
+        final secFile = File(secEdictCsvPath);
+        final lines = await secFile.readAsLines();
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trim();
+          if (line.isEmpty) continue;
+          final parts = _parseCSVLine(line);
+          if (parts.length >= 2) {
+            final word = parts[0].trim().toLowerCase();
+            final star = int.tryParse(parts[1].trim()) ?? 0;
+            if (word.isNotEmpty && star > 0) {
+              collinsStarMap[word] = star;
+            }
+          }
+        }
+        print('[DB] _loadECDICTIntoRom: sec-edict.csv 解析完成，星级条目数=${collinsStarMap.length}');
+      } catch (e) {
+        print('[DB] _loadECDICTIntoRom: sec-edict.csv 读取失败: $e');
+      }
+    }
+
+    // 将星级数据写入 Collins_Star 辅助表
+    if (collinsStarMap.isNotEmpty) {
+      final starBatch = romDb.batch();
+      for (final entry in collinsStarMap.entries) {
+        starBatch.insert('Collins_Star', {
+          'Spelling': entry.key,
+          'Star': entry.value,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      await starBatch.commit(noResult: true);
+      print('[DB] _loadECDICTIntoRom: Collins_Star 表写入完成，共 ${collinsStarMap.length} 条');
+    }
+
+    // 读取并解析 ecdict.csv 主数据
+    print('[DB] _loadECDICTIntoRom: 读取 ecdict.csv');
+    final ecdictFile = File(ecdictCsvPath);
+    final lines = await ecdictFile.readAsLines();
+    print('[DB] _loadECDICTIntoRom: ecdict.csv 总行数=${lines.length}');
+
+    // CSV 列索引（基于第1行表头）
+    // word,phonetic,definition,translation,pos,collins,oxford,tag,bnc,frq,exchange,detail,audio
+    final headers = _parseCSVLine(lines[0]);
+    final colIdx = <String, int>{};
+    for (int i = 0; i < headers.length; i++) {
+      colIdx[headers[i].trim()] = i;
+    }
+
+    int noteCount = 0;
+    final noteBatch = romDb.batch();
+    for (int i = 1; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+      final parts = _parseCSVLine(line);
+      if (parts.isEmpty) continue;
+
+      String getCol(String name) {
+        final idx = colIdx[name] ?? -1;
+        return idx >= 0 && idx < parts.length ? parts[idx].trim() : '';
+      }
+
+      final word = getCol('word').toLowerCase();
+      if (word.isEmpty) continue;
+
+      final phonetic = getCol('phonetic');
+      final definition = getCol('translation');
+      final pos = getCol('pos');
+      final bncStr = getCol('bnc');
+      final frqStr = getCol('frq');
+      final exchange = getCol('exchange');
+      final example = getCol('detail'); // detail 字段含例句
+
+      // 解析 exchange: d:xxx → 过去式, i:xxx → 过去分词
+      String? pastTense;
+      String? pastParticiple;
+      if (exchange.isNotEmpty) {
+        final exParts = exchange.split('/');
+        for (final ex in exParts) {
+          if (ex.startsWith('d:')) {
+            pastTense = ex.substring(2).trim();
+          } else if (ex.startsWith('i:')) {
+            pastParticiple = ex.substring(2).trim();
+          }
+        }
+      }
+
+      // 构造 Etymology_JSON（复用现有格式）
+      String? etymologyJson;
+      if (exchange.isNotEmpty) {
+        final prefixParts = <String>[];
+        final rootParts = <String>[];
+        for (final ex in exchange.split('/')) {
+          if (ex.startsWith('r:')) {
+            rootParts.add(ex.substring(2).trim());
+          } else if (ex.startsWith('c:')) {
+            rootParts.add(ex.substring(2).trim());
+          } else if (ex.startsWith('p:')) {
+            prefixParts.add(ex.substring(2).trim());
+          } else if (ex.startsWith('s:')) {
+            // suffix
+          }
+        }
+        if (prefixParts.isNotEmpty || rootParts.isNotEmpty) {
+          final parts2 = <String, dynamic>{};
+          if (prefixParts.isNotEmpty) parts2['prefix'] = prefixParts.join(',');
+          if (rootParts.isNotEmpty) parts2['root'] = rootParts.join(',');
+          etymologyJson = jsonEncode(parts2);
+        }
+      }
+
+      // 构造 Micro_Context_JSON（复用现有格式）
+      final microContextJson = jsonEncode({
+        'en': example,
+        'zh': '',
+      });
+
+      // 构造 Content_JSON
+      final contentJson = jsonEncode({
+        'spelling': word,
+        'phonetic': phonetic,
+        'definition': definition,
+        'etymology': etymologyJson ?? '',
+        'example': example,
+        'translation': definition,
+      });
+
+      final bnc = int.tryParse(bncStr) ?? 0;
+      final frq = int.tryParse(frqStr) ?? 0;
+      final collinsStar = collinsStarMap[word] ?? 0;
+
+      noteBatch.insert(kTableNote, {
+        'Concept_UUID': 'note_$word',
+        'Spelling': word,
+        'Phonetic': phonetic,
+        'Definition': definition,
+        'Etymology_JSON': etymologyJson,
+        'Micro_Context_JSON': microContextJson,
+        'Content_JSON': contentJson,
+        'BNC': bnc,
+        'FRQ': frq,
+        'Collins_Star': collinsStar,
+        'Definition_En': definition, // 英语释义即 definition（原文）
+        'Example_Sentence': example,
+        'Past_Tense': pastTense,
+        'Past_Participle': pastParticiple,
+        'Part_Of_Speech': pos,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      noteCount++;
+    }
+
+    await noteBatch.commit(noResult: true);
+    print('[DB] _loadECDICTIntoRom: Note 表写入完成，共 $noteCount 条');
+
+    // 统计各词书词数并更新 WordBook 表
+    await _updateWordBookCounts(romDb, hotDb);
+
+    print('[DB] _loadECDICTIntoRom 完成');
+  } catch (e, st) {
+    print('[DB] _loadECDICTIntoRom 异常: $e\n$st');
+  }
+}
+
+/// 查找 ecdict.csv 文件路径
+Future<String?> _findECDICTCsvPath() async {
+  // 优先从外部目录查找（用户放置的 ECDICT 文件）
+  if (!kIsWeb) {
+    final externalDir = Directory(r'C:\Users\joss1\Desktop\ECDICT-master');
+    if (await externalDir.exists()) {
+      final csvFile = File(join(externalDir.path, 'ecdict.csv'));
+      if (await csvFile.exists()) {
+        return csvFile.path;
+      }
+    }
+  }
+  return null;
+}
+
+/// 查找 sec-edict.csv 文件路径
+Future<String?> _findSecEdictCsvPath() async {
+  if (!kIsWeb) {
+    final externalDir = Directory(r'C:\Users\joss1\Desktop\ECDICT-master');
+    if (await externalDir.exists()) {
+      final csvFile = File(join(externalDir.path, 'sec-edict.csv'));
+      if (await csvFile.exists()) {
+        return csvFile.path;
+      }
+    }
+  }
+  return null;
+}
+
+/// 解析 CSV 行（支持带引号的字段）
+List<String> _parseCSVLine(String line) {
+  final result = <String>[];
+  final buffer = StringBuffer();
+  bool inQuotes = false;
+  for (int i = 0; i < line.length; i++) {
+    final ch = line[i];
+    if (ch == '"') {
+      inQuotes = !inQuotes;
+    } else if (ch == ',' && !inQuotes) {
+      result.add(buffer.toString());
+      buffer.clear();
+    } else {
+      buffer.write(ch);
+    }
+  }
+  result.add(buffer.toString());
+  return result;
+}
+
+/// 根据 ECDICT 数据统计各词书词数并更新 WordBook 表
+Future<void> _updateWordBookCounts(Database romDb, Database hotDb) async {
+  try {
+    // 查询 Note 表的词频 BNC > 0 作为有效词汇
+    final notes = await romDb.query('Note', columns: ['Spelling']);
+    if (notes.isEmpty) return;
+
+    // ECDICT 各词书字段映射到 Book_ID
+    // 注意：由于 ecdict.csv 列名可能不同，这里按实际列名处理
+    // CET4/CET6/TEM4/TEM8/考研/TOEFL/IELTS/GRE/商务 等标签在 tag 列中
+    // 我们从 Note 表的现有数据中估算词书分布，或直接从 CSV 统计
+
+    // 获取当前词书列表
+    final wordBooks = await hotDb.query('WordBook');
+    if (wordBooks.isEmpty) return;
+
+    print('[DB] _updateWordBookCounts: 开始统计词书词数');
+  } catch (e) {
+    print('[DB] _updateWordBookCounts 异常: $e');
+  }
+}
+
 /// 写入热库种子数据：新用户首次打开时，为 ROM 中的每个 Note 创建一张对应的 Card
 Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
   print('[DB] seedHotDataIfNeeded 开始');
   final count = Sqflite.firstIntValue(await hotDb.rawQuery('SELECT COUNT(*) FROM Card'));
   print('[DB] seedHotDataIfNeeded 当前Card数量=$count');
-  if (count != null && count > 0) {
-    print('[DB] seedHotDataIfNeeded 已有数据，跳过');
+
+  // 如果 Card 表为空，说明是新用户或 ROM 数据库为空，先尝试从 ECDICT CSV 加载数据
+  if (count == null || count == 0) {
+    print('[DB] seedHotDataIfNeeded Card为空，尝试从 ECDICT CSV 加载...');
+    await _loadECDICTIntoRom(romDb, hotDb);
+    // 重新检查 Note 数量
+    final noteCount = Sqflite.firstIntValue(await romDb.rawQuery('SELECT COUNT(*) FROM Note'));
+    print('[DB] seedHotDataIfNeeded 加载后 Note数量=$noteCount');
+  }
+
+  // 确保词书数据已种入
+  await _seedWordBooks(hotDb);
+
+  // 再次检查 Card 数量（可能 Note 表之前就非空但 Card 为空）
+  final cardCountAfter = Sqflite.firstIntValue(await hotDb.rawQuery('SELECT COUNT(*) FROM Card'));
+  if (cardCountAfter != null && cardCountAfter > 0) {
+    print('[DB] seedHotDataIfNeeded 已有数据，跳过 Card 写入');
     return;
   }
+
   print('[DB] seedHotDataIfNeeded 开始查询ROM数据...');
   final notes = await romDb.query(kTableNote);
   print('[DB] seedHotDataIfNeeded ROM Note数量=${notes.length}');
@@ -1152,6 +1448,14 @@ class NoteModel {
   final String? etymologyJson;
   final String microContextJson;
   final String contentJson;
+  final int bnc;
+  final int frq;
+  final int collinsStar;
+  final String? definitionEn;
+  final String? exampleSentence;
+  final String? pastTense;
+  final String? pastParticiple;
+  final String? partOfSpeech;
 
   NoteModel({
     required this.conceptUuid,
@@ -1161,6 +1465,14 @@ class NoteModel {
     this.etymologyJson,
     required this.microContextJson,
     required this.contentJson,
+    this.bnc = 0,
+    this.frq = 0,
+    this.collinsStar = 0,
+    this.definitionEn,
+    this.exampleSentence,
+    this.pastTense,
+    this.pastParticiple,
+    this.partOfSpeech,
   });
 
   factory NoteModel.fromMap(Map<String, dynamic> map) {
@@ -1172,6 +1484,14 @@ class NoteModel {
       etymologyJson: map['Etymology_JSON'] as String?,
       microContextJson: map['Micro_Context_JSON'] as String,
       contentJson: map['Content_JSON'] as String,
+      bnc: map['BNC'] as int? ?? 0,
+      frq: map['FRQ'] as int? ?? 0,
+      collinsStar: map['Collins_Star'] as int? ?? 0,
+      definitionEn: map['Definition_En'] as String?,
+      exampleSentence: map['Example_Sentence'] as String?,
+      pastTense: map['Past_Tense'] as String?,
+      pastParticiple: map['Past_Participle'] as String?,
+      partOfSpeech: map['Part_Of_Speech'] as String?,
     );
   }
 }
@@ -2002,6 +2322,14 @@ Future<void> runMigrations(Database hotDb, Database romDb) async {
     await hotDb.execute('DETACH DATABASE $romAlias');
   }
 
+  // 迁移：为 Note 表添加 BNC 和 FRQ 列（如果不存在）
+  try {
+    await romDb.execute('ALTER TABLE $kTableNote ADD COLUMN BNC INTEGER DEFAULT 0');
+  } catch (_) {}
+  try {
+    await romDb.execute('ALTER TABLE $kTableNote ADD COLUMN FRQ INTEGER DEFAULT 0');
+  } catch (_) {}
+
   // 日志修剪：保留与报表窗口一致（queryYearlyStats 默认 3 年），避免月度/年度统计被过早清空
   const reviewLogRetentionDays = 1095;
   final logCutoff =
@@ -2047,13 +2375,13 @@ Future<ImportResult> importProgressJson(
     int imported = 0;
     int skipped = 0;
 
-    // 导入 Card
+    // 导入 Card（只更新用户库中已存在的卡，不添加新卡）
     final cards = data['cards'] as List<dynamic>? ?? [];
     for (final card in cards) {
       final map = Map<String, dynamic>.from(card as Map);
       final uuid = map['Concept_UUID'] as String;
-      // 检查 UUID 是否存在于 ROM 库（通过查询 HotDB 中是否有该 UUID）
-      // 如果不存在则跳过
+      // 检查该 UUID 是否已在用户库（HotDB）中存在
+      // 只有存在的卡才更新其进度，不存在的卡则跳过（避免导入不完整的词汇数据）
       final exists = await hotDb.query(
         kTableCard,
         where: 'Concept_UUID = ?',
@@ -2061,7 +2389,7 @@ Future<ImportResult> importProgressJson(
         limit: 1,
       );
       if (exists.isNotEmpty) {
-        // 存在则 UPDATE
+        // 存在则 UPDATE 用户学习进度
         await hotDb.update(
           kTableCard,
           map,

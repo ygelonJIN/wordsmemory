@@ -144,6 +144,39 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                           focusColor: Colors.transparent,
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
+                          onTap: () async {
+                            await _model.finishLearning(context);
+                          },
+                          child: Text(
+                            'finish',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                                  fontSize: 18.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                  decoration: TextDecoration.underline,
+                                ),
+                          ),
+                        ),
+                        Spacer(),
+                        InkWell(
+                          splashColor: Colors.transparent,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () async {
+                            _model.reloadPage(context);
+                          },
                           child: Text(
                             'next',
                             style: FlutterFlowTheme.of(context)
@@ -252,15 +285,17 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                                       hoverColor: Colors.transparent,
                                       highlightColor: Colors.transparent,
                                       onTap: () async {
-                                        await BackendManager.instance.visitTreeWord(word.conceptUuid);
-                                        context.pushNamed(RandomLearnPageWidget.routeName);
+                                        await BackendManager.instance.startTreeLearnSession(
+                                          word.conceptUuid,
+                                          _model.currentRootId,
+                                        );
+                                        context.pushNamed(RandomAskPageWidget.routeName);
                                       },
                                       child: Padding(
                                         padding: EdgeInsets.symmetric(vertical: 4.0),
                                         child: RichText(
                                           text: TextSpan(
                                             children: [
-                                              // 单词部分：带下划线，点击时触发跳转
                                               TextSpan(
                                                 text: word.spelling,
                                                 style: GoogleFonts.notoSans(
@@ -273,8 +308,11 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                                                 ),
                                                 recognizer: TapGestureRecognizer()
                                                   ..onTap = () async {
-                                                    await BackendManager.instance.visitTreeWord(word.conceptUuid);
-                                                    context.pushNamed(RandomLearnPageWidget.routeName);
+                                                    await BackendManager.instance.startTreeLearnSession(
+                                                      word.conceptUuid,
+                                                      _model.currentRootId,
+                                                    );
+                                                    context.pushNamed(RandomAskPageWidget.routeName);
                                                   },
                                               ),
                                               // 等号+词根组合+词根含义+最终中文

@@ -32,6 +32,8 @@ class StudySession {
   String? topicReadingResumeArticleId;
   /// 从语义阅读页点词进入时，记录当前 topicId
   String? topicReadingResumeTopicId;
+  /// 从结构树页点词进入时，记录当前 rootId，用于 Learn 结束后返回
+  String? treeResumeRootId;
 
   StudySession({
     required this.mode,
@@ -46,10 +48,14 @@ class StudySession {
     topicReadingResumeTopicId = null;
   }
 
+  void clearTreeResume() {
+    treeResumeRootId = null;
+  }
+
   CardModel? get currentCard =>
       currentIndex < queue.length ? queue[currentIndex] : null;
 
-  bool get hasNext => currentIndex < queue.length - 1;
+  bool get hasNext => currentIndex + 1 < queue.length;
   bool get isEmpty => queue.isEmpty;
   int get progress => currentIndex + 1;
   int get total => queue.length;
@@ -140,6 +146,24 @@ class StudySessionManager {
       _currentSession!.topicReadingResumeArticleId = resumeArticleId;
       _currentSession!.topicReadingResumeTopicId = resumeTopicId;
       print('[Study] createSingleCardLearnSession: 会话已创建，resumeArticleId=$resumeArticleId');
+    }
+    return _currentSession!;
+  }
+
+  /// 从结构树页点词进入：创建单卡学习会话，携带恢复用 rootId
+  Future<StudySession> createTreeLearnSession(
+    String conceptUuid,
+    String rootId,
+  ) async {
+    print('[Study] createTreeLearnSession conceptUuid=$conceptUuid rootId=$rootId');
+    final card = await queryCardByUuid(hotDb, conceptUuid);
+    if (card == null) {
+      print('[Study] createTreeLearnSession: 卡不存在 conceptUuid=$conceptUuid');
+      _currentSession = StudySession(mode: StudyMode.learn, queue: []);
+    } else {
+      _currentSession = StudySession(mode: StudyMode.learn, queue: [card]);
+      _currentSession!.treeResumeRootId = rootId;
+      print('[Study] createTreeLearnSession: 会话已创建，treeResumeRootId=$rootId');
     }
     return _currentSession!;
   }
@@ -736,14 +760,13 @@ class TopicReadingManager {
   }
 
   Future<ArticleDisplayModel?> getArticleDisplay(String articleId) async {
-    print('[TopicReadingManager] getArticleDisplay articleId=$articleId');
     final articles = await romDb.query(
       kTableArticle,
       where: 'Article_ID = ?',
       whereArgs: [articleId],
       limit: 1,
     );
-    print('[TopicReadingManager] Article 查询结果: ${articles.length} 条');
+    print('[TopicReadingManager] getArticleDisplay articleId=$articleId, Article 查询结果: ${articles.length} 条');
     if (articles.isEmpty) {
       print('[TopicReadingManager] 未找到 Article=$articleId');
       return null;
@@ -763,10 +786,11 @@ class TopicReadingManager {
     }
 
     final topicModel = TopicModel.fromMap(topic.first);
+    print('[TopicReadingManager] contentJson 长度=${article.contentJson.length} 前100字符=${article.contentJson.length > 100 ? article.contentJson.substring(0, 100) : article.contentJson}');
     final readCount = await _countTopicReadUuids(article.contentJson);
     final segments = _parseContentJson(article.contentJson);
 
-    print('[TopicReadingManager] 返回 ArticleDisplayModel articleId=${article.articleId}');
+    print('[TopicReadingManager] 返回 ArticleDisplayModel articleId=${article.articleId} readCount=$readCount');
     return ArticleDisplayModel(
       articleId: article.articleId,
       topicName: topicModel.topicName,
@@ -779,15 +803,25 @@ class TopicReadingManager {
   Future<int> _countTopicReadUuids(String contentJson) async {
     try {
       final segments = _parseContentJson(contentJson);
+      print('[TopicReading] _countTopicReadUuids: 共 ${segments.length} 个 segments');
+      for (final seg in segments) {
+        final t = seg['t']?.toString() ?? '';
+        final preview = t.length > 20 ? '${t.substring(0, 20)}...' : t;
+        print('[TopicReading]   seg: t=$preview c=${seg['c']} u=${seg['u']}');
+      }
       int count = 0;
       for (final seg in segments) {
         if (seg['c'] == 1 && seg['u'] != null) {
-          final card = await queryCardByUuid(hotDb, seg['u'] as String);
+          final uuid = seg['u'] as String;
+          final card = await queryCardByUuid(hotDb, uuid);
+          print('[TopicReading]   uuid=$uuid card=${card != null ? "存在" : "不存在"} topicRead=${card?.topicRead}');
           if (card != null && card.topicRead == 1) count++;
         }
       }
+      print('[TopicReading] _countTopicReadUuids 最终 count=$count');
       return count;
-    } catch (_) {
+    } catch (e) {
+      print('[TopicReading] _countTopicReadUuids 异常: $e');
       return 0;
     }
   }
@@ -841,7 +875,9 @@ class TopicReadingManager {
         }
       }
       return [];
-    } catch (_) {
+    } catch (e) {
+      // JSON 解析失败时返回空列表，便于调试时可开启日志
+      // print('[Study] _parseContentJson 解析失败: $e');
       return [];
     }
   }

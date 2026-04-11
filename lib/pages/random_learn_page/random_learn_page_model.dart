@@ -1,9 +1,7 @@
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
-import 'random_learn_page_widget.dart' show RandomLearnPageWidget;
 import 'package:flutter/material.dart';
 import 'package:demo1red/backend/provider.dart';
-import 'package:demo1red/backend/tts_service.dart';
 import 'package:demo1red/backend/tts_service.dart';
 
 class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
@@ -11,6 +9,7 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
   bool isLoading = true;
   bool isFavorite = false;
   bool hasError = false;
+  String? errorMessage;
   bool _disposed = false;
 
   // 学习辅助显示开关
@@ -67,15 +66,38 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
     try {
       final session = BackendManager.instance.getStudySession();
       final pendingRating = session?.pendingRating;
-      if (pendingRating == null) return; // No pending rating, should not happen
+      print('[Learn] submitRating rating=$rating pendingRating=$pendingRating canResume=${session?.canResumeTopicReading}');
+      if (pendingRating == null) {
+        // 发生异常情况：没有待确认的评级，记录错误并提示用户
+        print('[Learn] ERROR: pendingRating 为 null，这不应该发生');
+        updatePage(() {
+          errorMessage = '学习状态异常，请返回重试';
+        });
+        return;
+      }
       await BackendManager.instance.confirmPendingRating(pendingRating);
+      print('[Learn] confirmPendingRating 完成');
 
       // 从语义阅读页点词进来的单卡会话：学完后返回同一篇文章
       if (session != null && session.canResumeTopicReading) {
+        // 标记该词已在专题阅读中学过，下次进入文章时 readCount 会包含此卡
+        final uuid = session.currentCard?.conceptUuid;
+        print('[Learn] canResume=true uuid=$uuid');
+        if (uuid != null) {
+          await BackendManager.instance.markTopicWordRead(uuid);
+          print('[Learn] markTopicWordRead($uuid) 完成');
+        }
         final articleId = session.resumeArticleId ?? 'art_tech_read_01';
         final topicId = session.resumeTopicId ?? 'topic_tech_read';
         print('[Learn] 回流到阅读页 articleId=$articleId');
-        ctx.go('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
+        ctx.push('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
+        return;
+      }
+
+      // 从结构树页点词进来的单卡会话：学完后返回同一词根的结构树页面
+      if (session != null && session.treeResumeRootId != null) {
+        print('[Learn] treeResumeRootId=${session.treeResumeRootId}');
+        ctx.go('/treePage?rootId=${session.treeResumeRootId}');
         return;
       }
 
@@ -84,7 +106,11 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
           BackendManager.instance.hasNextCard) {
         ctx.pushNamed(RandomAskPageWidget.routeName);
       } else {
-        ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true');
+        // 获取本次学习的 UUID 列表，转为拼写列表后传给 ResultPage
+        final learnedUuids = session?.learnedCards.map((c) => c.conceptUuid).toList() ?? [];
+        final spellings = await BackendManager.instance.getSpellingsByUuids(learnedUuids);
+        final spellingsEncoded = Uri.encodeComponent(jsonEncode(spellings));
+        ctx.push('${ResultPageWidget.routePath}?fromRandomLearn=true&learnedSpellings=$spellingsEncoded');
       }
     } catch (e) {
       if (!_disposed) ctx.pushNamed(ErrorPageWidget.routeName);

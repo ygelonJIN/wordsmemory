@@ -44,7 +44,10 @@ String formatEtymologyForDisplay(String raw) {
       if (suffix.isNotEmpty) parts.add('后缀：$suffix');
       if (parts.isNotEmpty) return parts.join('\n');
     }
-  } catch (_) {}
+  } catch (e) {
+    // JSON 解析失败时静默返回原始字符串，便于调试时可开启日志
+    // print('[Backend] formatEtymologyForDisplay 解析失败: $e');
+  }
   return s;
 }
 
@@ -61,7 +64,10 @@ String formatMicroContextForDisplay(String raw) {
       if (en.isNotEmpty) return en;
       if (zh.isNotEmpty) return zh;
     }
-  } catch (_) {}
+  } catch (e) {
+    // JSON 解析失败时静默返回原始字符串，便于调试时可开启日志
+    // print('[Backend] formatMicroContextForDisplay 解析失败: $e');
+  }
   return s;
 }
 
@@ -367,6 +373,13 @@ class BackendManager {
       goodPct: details['goodPct'] as double,
       easyPct: details['easyPct'] as double,
       nextReviewText: details['nextReview'] as String,
+      bncText: note.bnc > 0 ? 'bnc:${note.bnc}' : '',
+      frqText: note.frq > 0 ? 'frq:${note.frq}' : '',
+      synonymText: '',
+      collinsStar: note.collinsStar,
+      definitionEn: note.definitionEn,
+      pastTense: note.pastTense,
+      pastParticiple: note.pastParticiple,
     );
   }
 
@@ -413,6 +426,13 @@ class BackendManager {
       goodPct: details['goodPct'] as double,
       easyPct: details['easyPct'] as double,
       nextReviewText: details['nextReview'] as String,
+      bncText: note.bnc > 0 ? 'bnc:${note.bnc}' : '',
+      frqText: note.frq > 0 ? 'frq:${note.frq}' : '',
+      synonymText: '',
+      collinsStar: note.collinsStar,
+      definitionEn: note.definitionEn,
+      pastTense: note.pastTense,
+      pastParticiple: note.pastParticiple,
     );
   }
 
@@ -464,6 +484,13 @@ class BackendManager {
     );
   }
 
+  /// 从结构树页点词进入：创建单卡学习会话，携带恢复用 rootId
+  Future<void> startTreeLearnSession(String conceptUuid, String rootId) async {
+    _ensureInitialized();
+    print('[Provider] startTreeLearnSession uuid=$conceptUuid rootId=$rootId');
+    await _studyManager!.createTreeLearnSession(conceptUuid, rootId);
+  }
+
   /// 创建复习会话
   Future<void> createReviewSession({int? limit}) async {
     _ensureInitialized();
@@ -484,6 +511,12 @@ class BackendManager {
     final newVal = card.favorite == 1 ? 0 : 1;
     await updateCardFavorite(_hotDb!, uuid, newVal);
     return newVal == 1;
+  }
+
+  /// 标记专题阅读中的词为已读（设置 Topic_Read=1），使文章页 readCount 包含此卡
+  Future<void> markTopicWordRead(String uuid) async {
+    _ensureInitialized();
+    await updateCardTopicRead(_hotDb!, uuid);
   }
 
   // -------------------------------------------------------------------------
@@ -531,6 +564,17 @@ class BackendManager {
     final knownUuids = await queryKnownUuids(_hotDb!);
     final spellings = <String>[];
     for (final uuid in knownUuids) {
+      final note = await queryNoteByUuid(_romDb!, uuid);
+      if (note != null) spellings.add(note.spelling);
+    }
+    return spellings;
+  }
+
+  /// 根据 UUID 列表查询对应单词的拼写列表
+  Future<List<String>> getSpellingsByUuids(List<String> uuids) async {
+    _ensureInitialized();
+    final spellings = <String>[];
+    for (final uuid in uuids) {
       final note = await queryNoteByUuid(_romDb!, uuid);
       if (note != null) spellings.add(note.spelling);
     }
@@ -596,6 +640,7 @@ class BackendManager {
       );
     } catch (e, st) {
       print('[Provider] loadArticle 异常: $e\n$st');
+      print('[Provider] loadArticle 返回: null');
       return null;
     }
   }
@@ -847,6 +892,13 @@ class RandomLearnPageData {
   final double goodPct;
   final double easyPct;
   final String nextReviewText;
+  final String bncText;
+  final String frqText;
+  final String synonymText;
+  final int collinsStar;
+  final String? definitionEn;
+  final String? pastTense;
+  final String? pastParticiple;
 
   RandomLearnPageData({
     required this.conceptUuid,
@@ -869,6 +921,13 @@ class RandomLearnPageData {
     required this.goodPct,
     required this.easyPct,
     required this.nextReviewText,
+    this.bncText = '',
+    this.frqText = '',
+    this.synonymText = '',
+    this.collinsStar = 0,
+    this.definitionEn,
+    this.pastTense,
+    this.pastParticiple,
   });
 
   String get statusText => 'status:$cardStatus';
@@ -892,6 +951,14 @@ class RandomLearnPageData {
   String get easyPercentText => _formatPct(easyPct);
   String get contextText => microContext;
   String get progressText => progress;
+  String get collinsStarText => collinsStar > 0 ? 'collinsStar:$collinsStar' : '';
+  String get tenseText {
+    if (pastTense == null && pastParticiple == null) return '';
+    final pt = pastTense ?? '';
+    final pp = pastParticiple ?? '';
+    if (pt.isEmpty && pp.isEmpty) return '';
+    return '过去式: $pt  过去分词: $pp';
+  }
 }
 
 class QuickLearnItemData {

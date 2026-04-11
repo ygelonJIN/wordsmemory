@@ -9,6 +9,7 @@ class TopicReadingPage2Model extends FlutterFlowModel<TopicReadingPage2Widget> {
   bool isLoading = true;
   bool _disposed = false;
   bool _pageReady = false;
+  bool _loading = false; // 防止并发 _loadData
   String? nextArticleId;
   String? previousArticleId;
   bool hasPrevious = false;
@@ -28,8 +29,10 @@ class TopicReadingPage2Model extends FlutterFlowModel<TopicReadingPage2Widget> {
 
   Future<void> _loadData() async {
     if (_disposed) return;
+    if (_loading) return;
+    _loading = true;
     final ctx = context;
-    if (ctx == null) return;
+    if (ctx == null) { _loading = false; return; }
     _pageReady = true;
 
     try {
@@ -58,7 +61,7 @@ class TopicReadingPage2Model extends FlutterFlowModel<TopicReadingPage2Widget> {
         }
       }
 
-      if (_disposed || !_pageReady) return;
+      if (_disposed || !_pageReady) { _loading = false; return; }
       updatePage(() {
         pageData = data;
         nextArticleId = computedNext;
@@ -73,6 +76,7 @@ class TopicReadingPage2Model extends FlutterFlowModel<TopicReadingPage2Widget> {
         ctx.pushNamed(ErrorPageWidget.routeName);
       }
     }
+    _loading = false;
   }
 
   Future<void> onWordTap(String? uuid) async {
@@ -84,7 +88,7 @@ class TopicReadingPage2Model extends FlutterFlowModel<TopicReadingPage2Widget> {
       final articleId = widget?.articleId ?? 'art_tech_read_02';
       final tid = topicId ?? 'topic_tech_read';
       await BackendManager.instance.startTopicReadingWordSession(uuid, articleId, tid);
-      ctx.pushNamed(RandomAskPageWidget.routeName);
+      await ctx.pushNamed(RandomAskPageWidget.routeName);
     } catch (e) {
       print('[TopicReading2] onWordTap 异常: $e');
       ctx.pushNamed(ErrorPageWidget.routeName);
@@ -105,10 +109,21 @@ class TopicReadingPage2Model extends FlutterFlowModel<TopicReadingPage2Widget> {
     ctx.go('/topicReadingPage1?articleId=$previousArticleId&topicId=$tid');
   }
 
-  void onFinish() {
+  Future<void> onFinish() async {
     final ctx = context;
     if (ctx == null) return;
-    ctx.push('${ResultPageWidget.routePath}?fromSemanticReading=true');
+    // 如果有活跃会话，获取本次学习的 UUID 列表后传给 ResultPage
+    if (BackendManager.instance.hasSession) {
+      final learnedUuids = BackendManager.instance.getStudySession()?.learnedCards
+              .map((c) => c.conceptUuid)
+              .toList() ??
+          [];
+      final spellings = await BackendManager.instance.getSpellingsByUuids(learnedUuids);
+      final spellingsEncoded = Uri.encodeComponent(jsonEncode(spellings));
+      ctx.push('${ResultPageWidget.routePath}?fromSemanticReading=true&learnedSpellings=$spellingsEncoded');
+    } else {
+      ctx.push('${ResultPageWidget.routePath}?fromSemanticReading=true');
+    }
   }
 
   @override

@@ -13,6 +13,8 @@ class ResultPageWidget extends StatefulWidget {
     this.fromQuickLearn,
     this.fromRandomLearn,
     this.fromSemanticReading,
+    this.fromTreeLearning,
+    this.learnedSpellings,
   });
 
   static String routeName = 'ResultPage';
@@ -20,6 +22,8 @@ class ResultPageWidget extends StatefulWidget {
   final bool? fromQuickLearn;
   final bool? fromRandomLearn;
   final bool? fromSemanticReading;
+  final bool? fromTreeLearning;
+  final List<String>? learnedSpellings;
 
   @override
   State<ResultPageWidget> createState() => _ResultPageWidgetState();
@@ -37,7 +41,15 @@ class _ResultPageWidgetState extends State<ResultPageWidget> {
       fromQuickLearn: widget.fromQuickLearn,
       fromRandomLearn: widget.fromRandomLearn,
       fromSemanticReading: widget.fromSemanticReading,
+      fromTreeLearning: widget.fromTreeLearning,
+      learnedSpellings: widget.learnedSpellings,
     ));
+    // 在 initState 中设置一次，避免每次 build 都重新注册回调
+    _model.setOnUpdate(
+      onUpdate: () => setState(() {}),
+      updateOnChange: true,
+    );
+    _model.disposeOnWidgetDisposal = false;
   }
 
   @override
@@ -49,11 +61,6 @@ class _ResultPageWidgetState extends State<ResultPageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    _model.setOnUpdate(
-      onUpdate: () => setState(() {}),
-      updateOnChange: true,
-    );
-    _model.disposeOnWidgetDisposal = false;
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -198,7 +205,7 @@ class _ResultPageWidgetState extends State<ResultPageWidget> {
                       ),
                     ),
                   ),
-                  if (_model.fromQuickLearn != true && _model.fromRandomLearn != true && _model.fromSemanticReading != true && _model.sessionSummary.isNotEmpty)
+                  if (_model.fromQuickLearn != true && _model.fromRandomLearn != true && _model.sessionSummary.isNotEmpty)
                     Align(
                       alignment: AlignmentDirectional(1.0, 0.0),
                       child: Padding(
@@ -297,6 +304,246 @@ class _ResultPageWidgetState extends State<ResultPageWidget> {
                       ],
                     ),
                   ),
+                  // 统计数据：非快速筛选模式且有统计数据时显示
+                  if (_model.fromQuickLearn != true && _model.newCount.isNotEmpty) ...[
+                    // 统计数据第1行: 新学数量 | again
+                    Align(
+                      alignment: AlignmentDirectional(0.0, 1.0),
+                      child: Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Text(
+                              _model.newCount,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                            Spacer(),
+                            Text(
+                              _model.againPercent,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // 统计数据第2行: 复习数量 | hard
+                    Align(
+                      alignment: AlignmentDirectional(0.0, 1.0),
+                      child: Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Text(
+                              _model.reviewCount,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                            Spacer(),
+                            Text(
+                              _model.hardPercent,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // 统计数据第3行: 重学数量 | good
+                    Align(
+                      alignment: AlignmentDirectional(0.0, 1.0),
+                      child: Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Text(
+                              _model.relearnCount,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                            Spacer(),
+                            Text(
+                              _model.goodPercent,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // 统计数据第4行: 平均stability | easy
+                    Align(
+                      alignment: AlignmentDirectional(0.0, 1.0),
+                      child: Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Text(
+                              _model.avgStabilityChange,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                            Spacer(),
+                            Text(
+                              _model.easyPercent,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // 统计数据第5行: 平均retrievability（居中）
+                    Align(
+                      alignment: AlignmentDirectional(-1.0, -1.0),
+                      child: Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 50.0),
+                        child: Text(
+                          _model.avgRetrievabilityChange,
+                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                font: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w500,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                ),
+                                color: Colors.white,
+                                fontSize: 18.0,
+                                letterSpacing: 0.0,
+                                fontWeight: FontWeight.w500,
+                                fontStyle: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .fontStyle,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ],
                   Align(
                     alignment: AlignmentDirectional(0.0, 1.0),
                     child: Padding(
@@ -344,6 +591,8 @@ class _ResultPageWidgetState extends State<ResultPageWidget> {
                             onTap: () async {
                               if (_model.fromSemanticReading == true) {
                                 context.pushNamed(TopicCatelogWidget.routeName);
+                              } else if (_model.fromTreeLearning == true) {
+                                context.pushNamed(TreeCatelogWidget.routeName);
                               } else {
                                 context.pushNamed(RandomAskPageWidget.routeName);
                               }

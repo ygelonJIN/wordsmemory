@@ -20,6 +20,10 @@ class RandomAskPageModel extends FlutterFlowModel<RandomAskPageWidget> {
     _loadData();
   }
 
+  Future<void> refreshData() async {
+    await _loadData();
+  }
+
   Future<void> _loadData() async {
     if (_disposed) return;
     final ctx = context;
