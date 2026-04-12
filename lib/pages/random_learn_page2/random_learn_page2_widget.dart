@@ -453,43 +453,28 @@ class _RandomLearnPage2WidgetState extends State<RandomLearnPage2Widget> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '词根词缀：',
-                            style: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .override(
-                                  font: GoogleFonts.inter(
+                          if ((_model.cardData?.etymology.isNotEmpty ?? false)) ...[
+                            Text(
+                              '词根词缀：',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    fontSize: 20.0,
+                                    letterSpacing: 0.0,
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FontStyle.italic,
+                                    lineHeight: 2.0,
                                   ),
-                                  fontSize: 20.0,
-                                  letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
-                                  fontStyle: FontStyle.italic,
-                                  lineHeight: 2.0,
-                                ),
-                          ),
-                          Text(
-                            _model.cardData?.etymologyText ?? '',
-                            style: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .override(
-                                  font: GoogleFonts.inter(
-                                    fontWeight: FontWeight.normal,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontStyle,
-                                  ),
-                                  fontSize: 15.0,
-                                  letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
-                                  fontStyle: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .fontStyle,
-                                  lineHeight: 1.5,
-                                ),
-                          ),
-                          SizedBox(height: 8.0),
+                            ),
+                            RichText(
+                              text: _model.cardData?.etymologySpans ?? const TextSpan(text: ''),
+                            ),
+                            SizedBox(height: 8.0),
+                          ],
                           Text(
                             '词义：',
                             style: FlutterFlowTheme.of(context)

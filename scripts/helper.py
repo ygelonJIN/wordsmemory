@@ -1,0 +1,1 @@
+import os;f=open(r'c:\\Users\\joss1\\Desktop\\goldene\\scripts\\analyze_dirty.py','w');f.write(os.environ['PYCODE']);f.close;

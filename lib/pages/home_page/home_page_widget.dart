@@ -639,8 +639,12 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 onTap: () async {
                                   print('[HomePage] 点击学习按钮，开始 createLearnSession');
                                   try {
-                                    await BackendManager.instance.createLearnSession();
-                                    print('[HomePage] createLearnSession 完成，准备 pushNamed');
+                                    final settings = await BackendManager.instance.loadSettings();
+                                    await BackendManager.instance.createLearnSession(
+                                      limit: settings.singleSessionLimit,
+                                      bookId: settings.currentBook,
+                                    );
+                                    print('[HomePage] createLearnSession 完成，limit=${settings.singleSessionLimit} bookId=${settings.currentBook}');
                                   } catch (e) {
                                     print('[HomePage] createLearnSession 异常: $e');
                                   }

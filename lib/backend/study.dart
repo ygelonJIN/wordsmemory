@@ -106,9 +106,14 @@ class StudySessionManager {
     return _currentSession!;
   }
 
-  Future<StudySession> createLearnSession({int? limit}) async {
-    print('[Study] createLearnSession 开始');
-    final newCards = await queryNewCards(hotDb, limit: limit);
+  Future<StudySession> createLearnSession({int? limit, String? bookId}) async {
+    print('[Study] createLearnSession 开始, limit=$limit, bookId=$bookId');
+    List<CardModel> newCards;
+    if (bookId != null && bookId.isNotEmpty) {
+      newCards = await queryNewCardsByBook(hotDb, bookId, limit: limit);
+    } else {
+      newCards = await queryNewCards(hotDb, limit: limit);
+    }
     print('[Study] queryNewCards 完成, 共 ${newCards.length} 张卡');
     _currentSession = StudySession(mode: StudyMode.learn, queue: newCards);
     _currentSession!.clearTopicReadingResume();
@@ -603,18 +608,28 @@ class QuickScreenManager {
     _allItems = [];
     _knownCount = 0;
 
-    for (final card in cards) {
-      final note = await queryNoteByUuid(romDb, card.conceptUuid);
-      if (note == null) continue;
+    if (cards.isNotEmpty) {
+      // 批量查询所有 Note（用于显示 spelling）
+      // queryNewCards 已通过 seedHotDataIfNeeded 的孤立卡清理保证所有 Card 都有对应 Note
+      final allUuids = cards.map((c) => c.conceptUuid).toList();
+      final noteMap = await queryNotesBatch(romDb, allUuids);
+      print('[QuickScreen] initSession: 共 ${cards.length} 张卡，NoteMap 大小=${noteMap.length}');
 
-      final isKnown = knownUuids.contains(card.conceptUuid);
-      _allItems.add(QuickScreenItem(
-        conceptUuid: card.conceptUuid,
-        spelling: note.spelling,
-        status: isKnown
-            ? QuickScreenItemStatus.known
-            : QuickScreenItemStatus.unmarked,
-      ));
+      for (final card in cards) {
+        final note = noteMap[card.conceptUuid];
+        if (note == null) continue;
+        final spelling = note.spelling.trim();
+
+        final isKnown = knownUuids.contains(card.conceptUuid);
+        print('[QuickScreen] card ${card.conceptUuid}: spelling="${spelling}", etymology="${note.etymologyJson ?? ''}"');
+        _allItems.add(QuickScreenItem(
+          conceptUuid: card.conceptUuid,
+          spelling: spelling,
+          status: isKnown
+              ? QuickScreenItemStatus.known
+              : QuickScreenItemStatus.unmarked,
+        ));
+      }
     }
 
     _currentPage = 0;
@@ -698,20 +713,20 @@ class TreeManager {
 
   Future<List<TreeWordDisplayModel>> getWordsByRoot(String rootId) async {
     final words = await queryTreeWordsByRoot(romDb, rootId);
-    final displays = <TreeWordDisplayModel>[];
+    if (words.isEmpty) return [];
 
-    for (final word in words) {
-      final note = await queryNoteByUuid(romDb, word.conceptUuid);
-      displays.add(TreeWordDisplayModel(
+    // 批量查询所有 Note（一次查询替代数万个逐条查询）
+    final allUuids = words.map((w) => w.conceptUuid).toList();
+    final noteMap = await queryNotesBatch(romDb, allUuids);
+
+    return words.map((word) {
+      final note = noteMap[word.conceptUuid];
+      return TreeWordDisplayModel(
         conceptUuid: word.conceptUuid,
-        compoundForm: word.compoundForm,
-        compoundMeaning: word.compoundMeaning,
-        finalMeaning: word.finalMeaning,
         spelling: note?.spelling ?? word.compoundForm,
-      ));
-    }
-
-    return displays;
+        compoundForm: word.compoundForm,
+      );
+    }).toList();
   }
 
   Future<void> visitWord(String conceptUuid) async {
@@ -721,24 +736,14 @@ class TreeManager {
 
 class TreeWordDisplayModel {
   final String conceptUuid;
-  final String compoundForm;
-  final String compoundMeaning;
-  final String finalMeaning;
-  final String spelling;
+  final String spelling; // 单词本身
+  final String compoundForm; // 单词本身（Tree_Word 表直接就是单词）
 
   TreeWordDisplayModel({
     required this.conceptUuid,
-    required this.compoundForm,
-    required this.compoundMeaning,
-    required this.finalMeaning,
     required this.spelling,
+    required this.compoundForm,
   });
-
-  String get renderString =>
-      '$spelling=$compoundForm=$compoundMeaning=$finalMeaning';
-
-  /// 仅展示词根组合部分（不含单词）
-  String get renderDetail => '$compoundForm=$compoundMeaning=$finalMeaning';
 }
 
 // ============================================================================

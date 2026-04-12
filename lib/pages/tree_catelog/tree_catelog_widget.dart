@@ -1,3 +1,4 @@
+import 'dart:ui' show InlineSpan;
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
@@ -263,25 +264,27 @@ class _TreeCatelogWidgetState extends State<TreeCatelogWidget> {
                 onTap: () async {
                   _model.navigateToRoot(root.rootId);
                 },
-                child: Text(
-                  '${root.rootName}',
-                  style: FlutterFlowTheme.of(context)
-                      .displayLarge
-                      .override(
-                        font: GoogleFonts.notoSans(
+                child: RichText(
+                  text: TextSpan(
+                    children: _buildTreeRootNameSpans(root.rootName),
+                    style: FlutterFlowTheme.of(context)
+                        .displayLarge
+                        .override(
+                          font: GoogleFonts.notoSans(
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FlutterFlowTheme.of(context)
+                                .displayLarge
+                                .fontStyle,
+                          ),
+                          fontSize: 18.0,
+                          letterSpacing: 0.0,
                           fontWeight: FontWeight.w500,
                           fontStyle: FlutterFlowTheme.of(context)
                               .displayLarge
                               .fontStyle,
+                          decoration: TextDecoration.underline,
                         ),
-                        fontSize: 18.0,
-                        letterSpacing: 0.0,
-                        fontWeight: FontWeight.w500,
-                        fontStyle: FlutterFlowTheme.of(context)
-                            .displayLarge
-                            .fontStyle,
-                        decoration: TextDecoration.underline,
-                      ),
+                  ),
                 ),
               ),
             ),
@@ -296,5 +299,44 @@ class _TreeCatelogWidgetState extends State<TreeCatelogWidget> {
       scrollDirection: Axis.vertical,
       children: items,
     );
+  }
+
+  /// 为词根名称构建 InlineSpan：词根部分保持默认颜色，数字为灰色上标
+  /// 例如："cap2,capit,cipit" → cap[上标2],capit,cipit
+  List<InlineSpan> _buildTreeRootNameSpans(String text) {
+    const superscripts = {
+      '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3',
+      '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077',
+      '8': '\u2078', '9': '\u2079',
+    };
+
+    final regex = RegExp(r'([a-zA-Z-]+)(\d+)');
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final prefix = match.group(1) ?? '';
+      final digits = match.group(2) ?? '';
+      final superscripted = digits.split('').map((c) => superscripts[c] ?? c).join();
+
+      spans.add(TextSpan(text: prefix));
+      spans.add(TextSpan(
+        text: superscripted,
+        style: const TextStyle(color: Color(0xFF888888)),
+      ));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    if (spans.isEmpty) {
+      return [TextSpan(text: text)];
+    }
+    return spans;
   }
 }

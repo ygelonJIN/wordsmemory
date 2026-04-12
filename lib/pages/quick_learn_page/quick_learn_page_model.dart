@@ -26,24 +26,31 @@ class QuickLearnPageModel extends FlutterFlowModel<QuickLearnPageWidget> {
   Future<void> _loadData() async {
     if (_disposed) return;
     try {
-      await BackendManager.instance.initQuickLearnSession();
+      final settings = await BackendManager.instance.loadSettings();
+      await BackendManager.instance.initQuickLearnSession(limit: 70);
       if (!_disposed) {
-        updatePage(() {
-          items = BackendManager.instance.getQuickLearnItems();
-          progressText = BackendManager.instance.getQuickLearnProgress();
-          isLoading = false;
-        });
+        final loadedItems = await BackendManager.instance.getSessionCardsWithNote();
+        if (!_disposed) {
+          updatePage(() {
+            items = loadedItems;
+            progressText = BackendManager.instance.getQuickLearnProgress();
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
       if (!_disposed) updatePage(() => isLoading = false);
     }
   }
 
-  void refreshItems() {
-    updatePage(() {
-      items = BackendManager.instance.getQuickLearnItems();
-      progressText = BackendManager.instance.getQuickLearnProgress();
-    });
+  Future<void> refreshItems() async {
+    final loadedItems = await BackendManager.instance.getSessionCardsWithNote();
+    if (!_disposed) {
+      updatePage(() {
+        items = loadedItems;
+        progressText = BackendManager.instance.getQuickLearnProgress();
+      });
+    }
   }
 
   /// 切换认识/默认状态（两个状态来回切换）

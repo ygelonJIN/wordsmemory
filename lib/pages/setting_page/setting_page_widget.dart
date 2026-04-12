@@ -5,6 +5,7 @@ import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'setting_page_model.dart';
+import 'package:demo1red/backend/provider.dart' show WordBookModel;
 export 'setting_page_model.dart';
 
 class SettingPageWidget extends StatefulWidget {
@@ -293,50 +294,22 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                ..._model.wordBooks.map((book) {
-                                  final isSelected = _model.currentBook == book.bookId;
-                                  return Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        _model.wordBooks.indexOf(book) == 0 ? 20.0 : 6.0, 0.0,
-                                        book == _model.wordBooks.last ? 20.0 : 0.0, 0.0),
-                                    child: InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                if (_model.wordBooks.isNotEmpty) ...[
+                                  _WordBookItem(
+                                    book: _model.wordBooks.first,
+                                    isSelected: _model.currentBook == _model.wordBooks.first.bookId,
+                                    leftPadding: 20.0,
+                                    onTap: () => _model.setCurrentBook(_model.wordBooks.first.bookId),
+                                  ),
+                                  ..._model.wordBooks.skip(1).map((book) {
+                                    return _WordBookItem(
+                                      book: book,
+                                      isSelected: _model.currentBook == book.bookId,
+                                      leftPadding: 0.0,
                                       onTap: () => _model.setCurrentBook(book.bookId),
-                                      child: Text(
-                                        book.bookName,
-                                        textAlign: TextAlign.center,
-                                        style: FlutterFlowTheme.of(context)
-                                            .displayLarge
-                                            .override(
-                                              font: GoogleFonts.notoSans(
-                                                fontWeight: isSelected
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w500,
-                                                fontStyle: FlutterFlowTheme.of(context)
-                                                    .displayLarge
-                                                    .fontStyle,
-                                              ),
-                                              color: isSelected
-                                                  ? const Color(0xFF0000FF)
-                                                  : Colors.black,
-                                              fontSize: 20.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                              decoration: TextDecoration.underline,
-                                              lineHeight: 1.5,
-                                            ),
-                                      ),
-                                    ),
-                                  );
-                                }),
+                                    );
+                                  }),
+                                ],
                               ],
                             ),
                           ],
@@ -608,6 +581,72 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                               ],
                             ),
                           ],
+                        ),
+                        // ===== 词库诊断区域 =====
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, 0.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              '词库状态：',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight:
+                                          FlutterFlowTheme.of(context)
+                                              .displayMedium
+                                              .fontWeight,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 24.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FlutterFlowTheme.of(context)
+                                        .displayMedium
+                                        .fontWeight,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 2.0,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, 0.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              _model.loadError != null
+                                  ? '加载失败，请重试'
+                                  : _model.dbStats.isEmpty
+                                      ? '加载中...'
+                                      : _model.dbStats.containsKey('error')
+                                          ? '加载失败，请重试'
+                                          : '总词数: ${_model.dbStats['total'] ?? 0} | '
+                                              '星级词: ${_model.dbStats['collinsPos'] ?? 0} | '
+                                              'BNC词: ${_model.dbStats['bncPos'] ?? 0} | '
+                                              'FRQ词: ${_model.dbStats['frqPos'] ?? 0} | '
+                                              '近义词组: ${_model.dbStats['resembleCount'] ?? 0}',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle:
+                                          FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .fontStyle,
+                                    ),
+                                    fontSize: 14.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF555555),
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
                         ),
                         ListView(
                           padding: EdgeInsets.zero,
@@ -1003,6 +1042,54 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 词书选项辅助组件
+class _WordBookItem extends StatelessWidget {
+  const _WordBookItem({
+    required this.book,
+    required this.isSelected,
+    required this.leftPadding,
+    required this.onTap,
+  });
+
+  final WordBookModel book;
+  final bool isSelected;
+  final double leftPadding;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: leftPadding, right: 6.0),
+      child: InkWell(
+        splashColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        onTap: onTap,
+        child: Text(
+          book.bookName,
+          textAlign: TextAlign.center,
+          style: FlutterFlowTheme.of(context)
+              .displayLarge
+              .override(
+                font: GoogleFonts.notoSans(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                ),
+                color: isSelected ? const Color(0xFF0000FF) : Colors.black,
+                fontSize: 20.0,
+                letterSpacing: 0.0,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                decoration: TextDecoration.underline,
+                lineHeight: 1.5,
+              ),
         ),
       ),
     );

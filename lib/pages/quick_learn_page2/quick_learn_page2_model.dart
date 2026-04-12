@@ -26,42 +26,49 @@ class QuickLearnPage2Model extends FlutterFlowModel<QuickLearnPage2Widget> {
   Future<void> _loadData() async {
     if (_disposed) return;
     try {
-      await BackendManager.instance.initQuickLearnSession();
+      final settings = await BackendManager.instance.loadSettings();
+      await BackendManager.instance.initQuickLearnSession(limit: 70);
       if (!_disposed) {
-        updatePage(() {
-          items = BackendManager.instance.getQuickLearnItems();
-          progressText = BackendManager.instance.getQuickLearnProgress();
-          isLoading = false;
-        });
+        final loadedItems = await BackendManager.instance.getSessionCardsWithNote();
+        if (!_disposed) {
+          updatePage(() {
+            items = loadedItems;
+            progressText = BackendManager.instance.getQuickLearnProgress();
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
       if (!_disposed) updatePage(() => isLoading = false);
     }
   }
 
-  void refreshItems() {
-    updatePage(() {
-      items = BackendManager.instance.getQuickLearnItems();
-      progressText = BackendManager.instance.getQuickLearnProgress();
-    });
+  Future<void> refreshItems() async {
+    final loadedItems = await BackendManager.instance.getSessionCardsWithNote();
+    if (!_disposed) {
+      updatePage(() {
+        items = loadedItems;
+        progressText = BackendManager.instance.getQuickLearnProgress();
+      });
+    }
   }
 
   /// 切换认识/默认状态（两个状态来回切换）
   Future<void> toggleKnown(int index) async {
     await BackendManager.instance.toggleQuickLearnKnown(index);
-    refreshItems();
+    await refreshItems();
   }
 
   /// 加载下一页
   Future<void> nextPage() async {
     await BackendManager.instance.loadNextQuickLearnPage();
-    refreshItems();
+    await refreshItems();
   }
 
   /// 加载上一页
   Future<void> prevPage() async {
     await BackendManager.instance.loadPrevQuickLearnPage();
-    refreshItems();
+    await refreshItems();
   }
 
   @override

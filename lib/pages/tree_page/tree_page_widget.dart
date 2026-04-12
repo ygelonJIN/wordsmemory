@@ -2,8 +2,8 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
+import 'dart:ui' show Color;
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'tree_page_model.dart';
 import 'package:demo1red/backend/provider.dart';
@@ -40,6 +40,14 @@ class _TreePageWidgetState extends State<TreePageWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(TreePageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.rootId != oldWidget.rootId) {
+      _model.reloadData(widget.rootId ?? '');
+    }
   }
 
   @override
@@ -201,58 +209,82 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                       ],
                     ),
                   ),
-                  Align(
-                    alignment: AlignmentDirectional(-1.0, 0.0),
-                    child: Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(20.0, 10.0, 20.0, 0.0),
-                      child: Text(
-                        _model.pageData?.rootName ?? 're',
-                        textAlign: TextAlign.start,
-                        style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.notoSans(
-                                fontWeight: FontWeight.w800,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .fontStyle,
+                  // 词根名 + 英文释义 + Origin 同行布局
+                  Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(20.0, 10.0, 20.0, 0.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 词根名大字
+                              RichText(
+                                text: TextSpan(
+                                  children: _buildTreeRootNameSpans(
+                                    _model.rootName.isNotEmpty ? _model.rootName : (_model.pageData?.rootName ?? 're'),
+                                  ),
+                                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 80.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w800,
+                                    lineHeight: 1.0,
+                                  ),
+                                ),
                               ),
-                              color: Colors.black,
-                              fontSize: 80.0,
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.w800,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .fontStyle,
-                              lineHeight: 1.0,
+                              // 英文释义
+                              Text(
+                                _model.rootDefinition.isNotEmpty ? _model.rootDefinition : (_model.pageData?.rootDefinition ?? '又，再，重新'),
+                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                  font: GoogleFonts.notoSans(
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  color: Colors.black,
+                                  fontSize: 35.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Origin 靠右，与 rootDefinition 同行
+                        Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Text(
+                            _model.rootOrigin,
+                            style: GoogleFonts.notoSans(
+                              fontStyle: FontStyle.italic,
+                              fontSize: 16,
+                              color: Color(0xFF555555),
                             ),
-                      ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Align(
-                    alignment: AlignmentDirectional(-1.0, 0.0),
-                    child: Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                  // 构词说明（function 字段）
+                  if (_model.rootFunction.isNotEmpty) ...[
+                    Padding(
+                      padding: EdgeInsets.only(left: 20.0, top: 8.0, right: 20.0, bottom: 0.0),
                       child: Text(
-                        _model.pageData?.rootDefinition ?? '又，再，重新',
-                        style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FontWeight.normal,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .fontStyle,
-                              ),
-                              color: Colors.black,
-                              fontSize: 35.0,
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.normal,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .fontStyle,
-                            ),
+                        _model.rootFunction,
+                        style: GoogleFonts.notoSans(
+                          fontStyle: FontStyle.italic,
+                          fontSize: 13.0,
+                          color: Color(0xFF888888),
+                          height: 1.4,
+                        ),
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ),
+                  ],
                   SizedBox(
                     width: MediaQuery.of(context).size.width * 0.9,
                     child: Divider(
@@ -276,9 +308,9 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                                   padding: EdgeInsets.zero,
                                   shrinkWrap: true,
                                   scrollDirection: Axis.vertical,
-                                  itemCount: _model.pageData?.words.length ?? 0,
+                                  itemCount: _model.words.length,
                                   itemBuilder: (context, index) {
-                                    final word = _model.pageData!.words[index];
+                                    final word = _model.words[index];
                                     return InkWell(
                                       splashColor: Colors.transparent,
                                       focusColor: Colors.transparent,
@@ -292,40 +324,16 @@ class _TreePageWidgetState extends State<TreePageWidget> {
                                         context.pushNamed(RandomAskPageWidget.routeName);
                                       },
                                       child: Padding(
-                                        padding: EdgeInsets.symmetric(vertical: 4.0),
-                                        child: RichText(
-                                          text: TextSpan(
-                                            children: [
-                                              TextSpan(
-                                                text: word.spelling,
-                                                style: GoogleFonts.notoSans(
-                                                  fontSize: 16.0,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Colors.black,
-                                                  decoration: TextDecoration.underline,
-                                                  decorationColor: Colors.black,
-                                                  decorationThickness: 1.5,
-                                                ),
-                                                recognizer: TapGestureRecognizer()
-                                                  ..onTap = () async {
-                                                    await BackendManager.instance.startTreeLearnSession(
-                                                      word.conceptUuid,
-                                                      _model.currentRootId,
-                                                    );
-                                                    context.pushNamed(RandomAskPageWidget.routeName);
-                                                  },
-                                              ),
-                                              // 等号+词根组合+词根含义+最终中文
-                                              TextSpan(
-                                                text: '=${word.compoundForm}=${word.compoundMeaning}=${word.finalMeaning}',
-                                                style: GoogleFonts.notoSans(
-                                                  fontSize: 16.0,
-                                                  fontWeight: FontWeight.w400,
-                                                  color: Colors.black,
-                                                  decoration: TextDecoration.none,
-                                                ),
-                                              ),
-                                            ],
+                                        padding: EdgeInsets.symmetric(vertical: 6.0),
+                                        child: Text(
+                                          word.spelling,
+                                          style: GoogleFonts.notoSans(
+                                            fontSize: 20.0,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black,
+                                            decoration: TextDecoration.underline,
+                                            decorationColor: Colors.black,
+                                            decorationThickness: 1.5,
                                           ),
                                         ),
                                       ),
@@ -343,5 +351,44 @@ class _TreePageWidgetState extends State<TreePageWidget> {
         ),
       ),
     );
+  }
+
+  /// 为结构树词根名称构建 InlineSpan：词根部分保持默认颜色，数字为灰色上标
+  /// 例如："cap2,capit,cipit" → cap[上标2],capit,cipit
+  List<InlineSpan> _buildTreeRootNameSpans(String text) {
+    const superscripts = {
+      '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3',
+      '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077',
+      '8': '\u2078', '9': '\u2079',
+    };
+
+    final regex = RegExp(r'([a-zA-Z-]+)(\d+)');
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final prefix = match.group(1) ?? '';
+      final digits = match.group(2) ?? '';
+      final superscripted = digits.split('').map((c) => superscripts[c] ?? c).join();
+
+      spans.add(TextSpan(text: prefix));
+      spans.add(TextSpan(
+        text: superscripted,
+        style: const TextStyle(color: Color(0xFF888888)),
+      ));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    if (spans.isEmpty) {
+      return [TextSpan(text: text)];
+    }
+    return spans;
   }
 }

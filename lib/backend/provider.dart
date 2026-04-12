@@ -3,6 +3,7 @@ library wordmemory.backend;
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show InlineSpan, TextSpan, TextStyle, Color;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'database.dart';
@@ -28,27 +29,173 @@ String formatPhoneticForDisplay(String phonetic) {
   return '/$p/';
 }
 
-/// 词根词缀 JSON → 可读文本
+/// 规范化文本：统一换行符
+String sanitizeText(String s) {
+  return s.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+}
+
+/// 处理文本中的换行符：将字面 \n 字符串转换为真实换行，并规范化格式
+String formatTextWithNewlines(String s) {
+  if (s.isEmpty) return '';
+  return s
+    .replaceAll(r'\n', '\n')
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n');
+}
+
+/// 词根词缀 JSON → InlineSpan（数字部分为灰色上标）
+/// 支持两种格式：
+/// 1. roots 数组格式（数据库实际格式）：{"roots":[{...}],"compound":"","final":""}
+/// 2. prefix/root/suffix 格式：{"prefix":"","root":"","suffix":""}
+InlineSpan formatEtymologyAsSpans(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return const TextSpan(text: '');
+  final lines = <InlineSpan>[];
+
+  String? prefixPart;
+  String? prefixMeaning;
+  String? rootPart;
+  String? rootMeaning;
+  String? suffixPart;
+  String? suffixMeaning;
+
+  try {
+    final dynamic d = jsonDecode(s);
+    if (d is! Map) return const TextSpan(text: '');
+    final map = d as Map<String, dynamic>;
+
+    // 优先处理 roots 数组格式
+    final roots = map['roots'] as List?;
+    if (roots != null && roots.isNotEmpty) {
+      for (int i = 0; i < roots.length; i++) {
+        if (roots[i] is! Map) continue;
+        final rootMap = roots[i] as Map<String, dynamic>;
+        final root = rootMap['root']?.toString().trim() ?? '';
+        final meaning = rootMap['meaning']?.toString().trim() ?? '';
+        if (root.isNotEmpty) {
+          lines.add(_buildLineSpan(root, meaning));
+        }
+      }
+    }
+
+    if (lines.isEmpty) {
+      // 备用：处理 prefix/root/suffix 格式
+      final prefix = map['prefix']?.toString().trim() ?? '';
+      final prefixMeaning2 = map['prefixMeaning']?.toString().trim() ?? '';
+      final root = map['root']?.toString().trim() ?? '';
+      final rootMeaning2 = map['rootMeaning']?.toString().trim() ?? '';
+      final suffix = map['suffix']?.toString().trim() ?? '';
+      final suffixMeaning2 = map['suffixMeaning']?.toString().trim() ?? '';
+      if (prefix.isNotEmpty) lines.add(_buildLineSpan(prefix, prefixMeaning2));
+      if (root.isNotEmpty) lines.add(_buildLineSpan(root, rootMeaning2));
+      if (suffix.isNotEmpty) lines.add(_buildLineSpan(suffix, suffixMeaning2));
+    }
+  } catch (e) {
+    print('[formatEtymology] 解析失败: $e');
+  }
+
+  if (lines.isEmpty) return const TextSpan(text: '');
+
+  return TextSpan(children: [
+    for (int i = 0; i < lines.length; i++) ...[
+      lines[i],
+      if (i < lines.length - 1) const TextSpan(text: '\n'),
+    ],
+  ]);
+}
+
+/// 构建单行 InlineSpan：词根(数字上标+灰色) + 意思
+InlineSpan _buildLineSpan(String root, String meaning) {
+  if (meaning.isNotEmpty) {
+    // "root — meaning"
+    return TextSpan(children: [
+      _buildEtymologySpans(root),
+      TextSpan(text: ' — $meaning'),
+    ]);
+  }
+  return _buildEtymologySpans(root);
+}
+
+/// 词根词缀 JSON → 纯文本（数字转为 Unicode 上标，用于纯文本场景）
 String formatEtymologyForDisplay(String raw) {
   final s = raw.trim();
   if (s.isEmpty) return '';
-  try {
-    final dynamic d = jsonDecode(s);
-    if (d is Map) {
-      final prefix = d['prefix']?.toString() ?? '';
-      final root = d['root']?.toString() ?? '';
-      final suffix = d['suffix']?.toString() ?? '';
-      final parts = <String>[];
-      if (prefix.isNotEmpty) parts.add('前缀：$prefix');
-      if (root.isNotEmpty) parts.add('词根：$root');
-      if (suffix.isNotEmpty) parts.add('后缀：$suffix');
-      if (parts.isNotEmpty) return parts.join('\n');
-    }
-  } catch (e) {
-    // JSON 解析失败时静默返回原始字符串，便于调试时可开启日志
-    // print('[Backend] formatEtymologyForDisplay 解析失败: $e');
+  final span = formatEtymologyAsSpans(s);
+  if (span is TextSpan && span.children == null) {
+    return (span as TextSpan).text ?? '';
   }
-  return s;
+  // 手动拼接纯文本版本
+  final buffer = StringBuffer();
+  _extractTextFromSpan(span, buffer);
+  return buffer.toString();
+}
+
+/// 从 InlineSpan 提取纯文本
+void _extractTextFromSpan(InlineSpan span, StringBuffer buf) {
+  if (span is TextSpan) {
+    buf.write(span.text ?? '');
+    if (span.children != null) {
+      for (final child in span.children!) {
+        _extractTextFromSpan(child, buf);
+      }
+    }
+  }
+}
+
+/// 将词根中末尾的数字转为带样式的 InlineSpan
+/// 词根部分保持默认颜色，数字部分为灰色上标
+/// 例如：cid2 → TextSpan("cid") + TextSpan("²", style: gray)
+InlineSpan _buildEtymologySpans(String text) {
+  const superscripts = {
+    '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3',
+    '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077',
+    '8': '\u2078', '9': '\u2079',
+  };
+
+  final regex = RegExp(r'([a-zA-Z-]+)(\d+)');
+  final spans = <InlineSpan>[];
+  int lastEnd = 0;
+
+  for (final match in regex.allMatches(text)) {
+    if (match.start > lastEnd) {
+      spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+    }
+    final prefix = match.group(1) ?? '';
+    final digits = match.group(2) ?? '';
+    final superscripted = digits.split('').map((c) => superscripts[c] ?? c).join();
+
+    spans.add(TextSpan(text: prefix)); // 词根：默认颜色
+    spans.add(TextSpan(
+      text: superscripted,
+      style: const TextStyle(color: Color(0xFF888888)), // 数字：灰色
+    ));
+    lastEnd = match.end;
+  }
+
+  if (lastEnd < text.length) {
+    spans.add(TextSpan(text: text.substring(lastEnd)));
+  }
+
+  if (spans.isEmpty) {
+    return TextSpan(text: text);
+  }
+  return TextSpan(children: spans);
+}
+
+/// 兼容旧调用：将数字转为 Unicode 上标文本（用于纯文本场景）
+String applySuperscriptToText(String text) {
+  const superscripts = {
+    '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3',
+    '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077',
+    '8': '\u2078', '9': '\u2079',
+  };
+  final regex = RegExp(r'([a-zA-Z-]+)(\d+)');
+  return text.replaceAllMapped(regex, (m) {
+    final prefix = m.group(1) ?? '';
+    final digits = m.group(2) ?? '';
+    final superscripted = digits.split('').map((c) => superscripts[c] ?? c).join();
+    return '$prefix$superscripted';
+  });
 }
 
 /// 例句 microContext JSON → 可读文本
@@ -90,7 +237,6 @@ class BackendManager {
   Database? _romDb;
   Database? _hotDb;
   StudySessionManager? _studyManager;
-  QuickScreenManager? _quickScreenManager;
   TreeManager? _treeManager;
   TopicReadingManager? _topicManager;
 
@@ -175,7 +321,6 @@ class BackendManager {
     try {
       if (_hotDb != null && _romDb != null) {
         _studyManager = StudySessionManager(hotDb: _hotDb!, romDb: _romDb!);
-        _quickScreenManager = QuickScreenManager(hotDb: _hotDb!, romDb: _romDb!);
         _treeManager = TreeManager(hotDb: _hotDb!, romDb: _romDb!);
         _topicManager = TopicReadingManager(hotDb: _hotDb!, romDb: _romDb!);
       }
@@ -373,13 +518,24 @@ class BackendManager {
       goodPct: details['goodPct'] as double,
       easyPct: details['easyPct'] as double,
       nextReviewText: details['nextReview'] as String,
-      bncText: note.bnc > 0 ? 'bnc:${note.bnc}' : '',
-      frqText: note.frq > 0 ? 'frq:${note.frq}' : '',
-      synonymText: '',
+      bncText: note.bnc > 0 ? 'bnc:${note.bnc}' : 'bnc:no',
+      frqText: note.frq > 0 ? 'frq:${note.frq}' : 'frq:no',
       collinsStar: note.collinsStar,
       definitionEn: note.definitionEn,
       pastTense: note.pastTense,
       pastParticiple: note.pastParticiple,
+      presentParticiple: note.presentParticiple,
+      thirdPerson: note.thirdPerson,
+      comparative: note.comparative,
+      superlative: note.superlative,
+      plural: note.plural,
+      lemma: note.lemma,
+      lemmaVariant: note.lemmaVariant,
+      tagList: note.tagList,
+      synonymJson: note.synonymJson,
+      isOxford: note.isOxford,
+      oxford3000: note.oxford3000,
+      oxford5000: note.oxford5000,
     );
   }
 
@@ -426,13 +582,24 @@ class BackendManager {
       goodPct: details['goodPct'] as double,
       easyPct: details['easyPct'] as double,
       nextReviewText: details['nextReview'] as String,
-      bncText: note.bnc > 0 ? 'bnc:${note.bnc}' : '',
-      frqText: note.frq > 0 ? 'frq:${note.frq}' : '',
-      synonymText: '',
+      bncText: note.bnc > 0 ? 'bnc:${note.bnc}' : 'bnc:no',
+      frqText: note.frq > 0 ? 'frq:${note.frq}' : 'frq:no',
       collinsStar: note.collinsStar,
       definitionEn: note.definitionEn,
       pastTense: note.pastTense,
       pastParticiple: note.pastParticiple,
+      presentParticiple: note.presentParticiple,
+      thirdPerson: note.thirdPerson,
+      comparative: note.comparative,
+      superlative: note.superlative,
+      plural: note.plural,
+      lemma: note.lemma,
+      lemmaVariant: note.lemmaVariant,
+      tagList: note.tagList,
+      synonymJson: note.synonymJson,
+      isOxford: note.isOxford,
+      oxford3000: note.oxford3000,
+      oxford5000: note.oxford5000,
     );
   }
 
@@ -468,9 +635,9 @@ class BackendManager {
   }
 
   /// 创建学习会话（复习/学习按钮跳页前必须调用）
-  Future<void> createLearnSession({int? limit}) async {
+  Future<void> createLearnSession({int? limit, String? bookId}) async {
     _ensureInitialized();
-    await _studyManager!.createLearnSession(limit: limit);
+    await _studyManager!.createLearnSession(limit: limit, bookId: bookId);
   }
 
   /// 从语义阅读页点词进入：创建单卡学习会话，携带恢复用 articleId / topicId
@@ -525,39 +692,118 @@ class BackendManager {
 
   Future<void> initQuickLearnSession({int? limit}) async {
     _ensureInitialized();
-    await _quickScreenManager!.initSession(limit: limit);
+    final settings = await loadSettings();
+    await _studyManager!.createLearnSession(limit: limit, bookId: settings.currentBook);
   }
 
   List<QuickLearnItemData> getQuickLearnItems() {
-    return _quickScreenManager!.items.asMap().entries.map((e) {
+    return getSessionCards();
+  }
+
+  String getQuickLearnProgress() {
+    final session = _studyManager?.currentSession;
+    if (session == null) return '本次已标注: 0 个';
+    final known = session.learnedCards.length;
+    return '本次已标注: $known 个 / ${session.total} 张';
+  }
+
+  Future<void> toggleQuickLearnKnown(int index) async {
+    final session = _studyManager?.currentSession;
+    if (session == null || index < 0 || index >= session.queue.length) return;
+
+    final card = session.queue[index];
+    final uuid = card.conceptUuid;
+
+    // 查当前认识状态：优先查 learnedCards（已落盘的），其次查 Quick_Screen 表（仅内存标记的）
+    final learnedSet = session.learnedCards.map((c) => c.conceptUuid).toSet();
+    final screenRows = await _hotDb!.query(
+      kTableQuickScreen,
+      columns: ['Status'],
+      where: 'Concept_UUID = ?',
+      whereArgs: [uuid],
+      limit: 1,
+    );
+    final isCurrentlyKnown = learnedSet.contains(uuid) ||
+        (screenRows.isNotEmpty && (screenRows.first['Status'] as int) == 1);
+
+    final willBeKnown = !isCurrentlyKnown;
+    await toggleWordScreenStatus(_hotDb!, uuid, willBeKnown);
+  }
+
+  Future<void> loadNextQuickLearnPage() async {
+    // QuickScreen 不需要翻页，全量在 queue 中通过列表显示
+  }
+
+  Future<void> loadPrevQuickLearnPage() async {
+    // QuickScreen 不需要翻页，全量在 queue 中通过列表显示
+  }
+
+  bool hasNextQuickLearnPage() => false;
+
+  bool hasPrevQuickLearnPage() => false;
+
+  bool getQuickLearnIsAllDone() {
+    final session = _studyManager?.currentSession;
+    if (session == null) return true;
+    return session.learnedCards.length >= session.total;
+  }
+
+  /// 从当前 StudySession 读取所有卡片，批量查询 Note，返回 QuickLearnItemData 列表
+  /// 与 Ask 页面共用同一数据源（createLearnSession → queryNewCardsByBook）
+  List<QuickLearnItemData> getSessionCards() {
+    final session = _studyManager?.currentSession;
+    if (session == null) return [];
+
+    final learnedSet = session.learnedCards.map((c) => c.conceptUuid).toSet();
+    return session.queue.asMap().entries.map((e) {
+      final card = e.value;
       return QuickLearnItemData(
         index: e.key,
-        conceptUuid: e.value.conceptUuid,
-        spelling: e.value.spelling,
-        isKnown: e.value.status == QuickScreenItemStatus.known,
+        conceptUuid: card.conceptUuid,
+        spelling: '', // spelling 从 Note 中查询，异步加载
+        isKnown: learnedSet.contains(card.conceptUuid),
       );
     }).toList();
   }
 
-  String getQuickLearnProgress() => _quickScreenManager!.progressText;
+  /// 异步批量加载 Note 的 spelling，填充到 QuickLearnItemData 中
+  Future<List<QuickLearnItemData>> getSessionCardsWithNote() async {
+    final session = _studyManager?.currentSession;
+    if (session == null) return [];
 
-  Future<void> toggleQuickLearnKnown(int index) async {
-    await _quickScreenManager!.toggleKnown(index);
+    final allUuids = session.queue.map((c) => c.conceptUuid).toList();
+    final noteMap = await queryNotesBatch(_romDb!, allUuids);
+    final learnedSet = session.learnedCards.map((c) => c.conceptUuid).toSet();
+
+    // 查 Quick_Screen 表中的标记状态（仅内存标记，未落盘的）
+    final screenRows = await _hotDb!.query(
+      kTableQuickScreen,
+      columns: ['Concept_UUID', 'Status'],
+      where: 'Concept_UUID IN (${List.filled(allUuids.length, '?').join(',')})',
+      whereArgs: allUuids,
+    );
+    final screenMap = <String, int>{};
+    for (final row in screenRows) {
+      final uuid = row['Concept_UUID'] as String;
+      screenMap[uuid] = row['Status'] as int;
+    }
+
+    final items = <QuickLearnItemData>[];
+    for (int i = 0; i < session.queue.length; i++) {
+      final card = session.queue[i];
+      final note = noteMap[card.conceptUuid];
+      final learned = learnedSet.contains(card.conceptUuid);
+      final screenStatus = screenMap[card.conceptUuid];
+      final isKnown = learned || (screenStatus == 1);
+      items.add(QuickLearnItemData(
+        index: i,
+        conceptUuid: card.conceptUuid,
+        spelling: note?.spelling ?? '',
+        isKnown: isKnown,
+      ));
+    }
+    return items;
   }
-
-  Future<void> loadNextQuickLearnPage() async {
-    await _quickScreenManager!.nextPage();
-  }
-
-  Future<void> loadPrevQuickLearnPage() async {
-    await _quickScreenManager!.prevPage();
-  }
-
-  bool hasNextQuickLearnPage() => _quickScreenManager!.hasNextPage;
-
-  bool hasPrevQuickLearnPage() => _quickScreenManager!.hasPrevPage;
-
-  bool getQuickLearnIsAllDone() => _quickScreenManager!.isAllDone;
 
   Future<List<String>> getQuickMarkedSpellings() async {
     _ensureInitialized();
@@ -595,6 +841,8 @@ class BackendManager {
       rootId: root.rootId,
       rootName: root.rootName,
       rootDefinition: root.rootDefinition,
+      rootOrigin: root.origin,
+      rootFunction: root.rootFunction,
       words: words,
     );
   }
@@ -726,8 +974,23 @@ class BackendManager {
 
   /// 加载所有词书列表
   Future<List<WordBookModel>> loadWordBooks() async {
+    // 直接检查数据库引用，不调用 _ensureInitialized()（后者会抛异常）
+    if (_hotDb == null) {
+      print('[Backend] loadWordBooks: hotDb 未就绪，返回空列表');
+      return [];
+    }
+    try {
+      return await queryAllWordBooks(_hotDb!);
+    } catch (e) {
+      print('[Backend] loadWordBooks 异常: $e');
+      return [];
+    }
+  }
+
+  /// 获取词库诊断统计
+  Future<Map<String, int>> getDatabaseStats() async {
     _ensureInitialized();
-    return queryAllWordBooks(_hotDb!);
+    return queryNoteStats(_romDb!);
   }
 
   // -------------------------------------------------------------------------
@@ -894,11 +1157,22 @@ class RandomLearnPageData {
   final String nextReviewText;
   final String bncText;
   final String frqText;
-  final String synonymText;
   final int collinsStar;
   final String? definitionEn;
   final String? pastTense;
   final String? pastParticiple;
+  final String? presentParticiple;
+  final String? thirdPerson;
+  final String? comparative;
+  final String? superlative;
+  final String? plural;
+  final String? lemma;
+  final String? lemmaVariant;
+  final String? tagList;      // JSON 数组字符串
+  final String? synonymJson;   // 近义词辨析 JSON
+  final int isOxford;
+  final int oxford3000;
+  final int oxford5000;
 
   RandomLearnPageData({
     required this.conceptUuid,
@@ -923,11 +1197,22 @@ class RandomLearnPageData {
     required this.nextReviewText,
     this.bncText = '',
     this.frqText = '',
-    this.synonymText = '',
     this.collinsStar = 0,
     this.definitionEn,
     this.pastTense,
     this.pastParticiple,
+    this.presentParticiple,
+    this.thirdPerson,
+    this.comparative,
+    this.superlative,
+    this.plural,
+    this.lemma,
+    this.lemmaVariant,
+    this.tagList,
+    this.synonymJson,
+    this.isOxford = 0,
+    this.oxford3000 = 0,
+    this.oxford5000 = 0,
   });
 
   String get statusText => 'status:$cardStatus';
@@ -943,21 +1228,84 @@ class RandomLearnPageData {
   String get spellingText => spelling;
   String get phoneticText => formatPhoneticForDisplay(phonetic);
   String get etymologyText => etymology;
-  String get definitionText => definition;
+
+  /// 词根词缀 InlineSpan（数字部分为灰色上标），用于 RichText 显示
+  InlineSpan get etymologySpans => formatEtymologyAsSpans(etymology);
+
+  String get definitionText => formatTextWithNewlines(definition);
+
+  /// 英语释义（处理 \n 换行）
+  String? get definitionEnText =>
+      definitionEn != null ? formatTextWithNewlines(definitionEn!) : null;
   String get favoriteButtonText => isFavorite ? '已收藏' : '收藏';
   String get againPercentText => _formatPct(againPct);
   String get hardPercentText => _formatPct(hardPct);
   String get goodPercentText => _formatPct(goodPct);
   String get easyPercentText => _formatPct(easyPct);
-  String get contextText => microContext;
+  String get contextText => formatTextWithNewlines(microContext);
   String get progressText => progress;
-  String get collinsStarText => collinsStar > 0 ? 'collinsStar:$collinsStar' : '';
-  String get tenseText {
-    if (pastTense == null && pastParticiple == null) return '';
-    final pt = pastTense ?? '';
-    final pp = pastParticiple ?? '';
-    if (pt.isEmpty && pp.isEmpty) return '';
-    return '过去式: $pt  过去分词: $pp';
+
+  /// 科林斯星级（始终显示）
+  String get collinsStarText => 'collinsStar:$collinsStar';
+
+  /// 完整时态显示（过去式/过去分词/现在分词/三单/比较级/最高级/复数）
+  String get fullTenseText {
+    final parts = <String>[];
+    if (pastTense?.isNotEmpty == true) parts.add('过去式: $pastTense');
+    if (pastParticiple?.isNotEmpty == true) parts.add('过去分词: $pastParticiple');
+    if (presentParticiple?.isNotEmpty == true) parts.add('现在分词: $presentParticiple');
+    if (thirdPerson?.isNotEmpty == true) parts.add('三单: $thirdPerson');
+    if (comparative?.isNotEmpty == true) parts.add('比较级: $comparative');
+    if (superlative?.isNotEmpty == true) parts.add('最高级: $superlative');
+    if (plural?.isNotEmpty == true) parts.add('复数: $plural');
+    if (lemma?.isNotEmpty == true) parts.add('原型: $lemma');
+    return parts.join('  ');
+  }
+
+  /// 兼容旧字段（保留用于现有 widget）
+  String get tenseText => fullTenseText;
+
+  /// 近义词分组标题
+  String? get synonymGroupTitleText {
+    if (synonymJson == null || synonymJson!.isEmpty) return null;
+    try {
+      final Map<String, dynamic> data = jsonDecode(synonymJson!);
+      return data['title'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 近义词辨析详情（格式化后的文本）
+  String? get synonymDetailText {
+    if (synonymJson == null || synonymJson!.isEmpty) return null;
+    try {
+      final Map<String, dynamic> data = jsonDecode(synonymJson!);
+      final detail = data['detail'] as Map<String, dynamic>?;
+      if (detail == null || detail.isEmpty) return null;
+      return detail.entries.map((e) => '- ${e.key}: ${e.value}').join('\n');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 词书标签显示
+  String? get tagListText {
+    if (tagList == null || tagList!.isEmpty) return null;
+    try {
+      final List<dynamic> tags = jsonDecode(tagList!);
+      return tags.map((t) => '[$t]').join(' ');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Oxford 徽章文字
+  String? get oxfordBadgeText {
+    if (oxford5000 > 0) return '牛津5000';
+    if (oxford3000 > 0) return '牛津3000';
+    if (isOxford > 0) return 'Oxford';
+    return null;
   }
 }
 
@@ -982,12 +1330,16 @@ class TreePageData {
   final String rootId;
   final String rootName;
   final String rootDefinition;
+  final String rootOrigin;
+  final String rootFunction;   // 构词说明（新增）
   final List<TreeWordDisplayModel> words;
 
   TreePageData({
     required this.rootId,
     required this.rootName,
     required this.rootDefinition,
+    required this.rootOrigin,
+    required this.rootFunction,
     required this.words,
   });
 

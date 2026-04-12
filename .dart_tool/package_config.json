@@ -80,6 +80,12 @@
       "languageVersion": "3.4"
     },
     {
+      "name": "csv",
+      "rootUri": "file:///C:/Users/joss1/AppData/Local/Pub/Cache/hosted/pub.dev/csv-6.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "cupertino_icons",
       "rootUri": "file:///C:/Users/joss1/AppData/Local/Pub/Cache/hosted/pub.dev/cupertino_icons-1.0.9",
       "packageUri": "lib/",

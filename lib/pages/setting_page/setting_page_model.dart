@@ -49,6 +49,12 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
   /// 动态加载的词书列表（从数据库 WordBook 表读取）
   List<WordBookModel> wordBooks = [];
 
+  /// 词库诊断统计
+  Map<String, int> dbStats = {};
+
+  /// 加载错误状态
+  String? loadError;
+
   // 直接暴露状态字段，避免每次读 DB；set 时直接修改 + updatePage 刷新
   String currentBook = 'cet6';
   int singleSessionLimit = 70;
@@ -66,16 +72,56 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
   }
 
   Future<void> _loadData() async {
-    if (isLoading || _disposed) return;
+    if (_disposed) return;
+    print('[SettingPage] _loadData 开始');
     try {
+      print('[SettingPage] BackendManager.instance: ${BackendManager.instance}');
+      print('[SettingPage] isInitialized: ${BackendManager.instance.isInitialized}');
+
+      // 先确保 BackendManager 完成初始化，再加载数据
+      if (!BackendManager.instance.isInitialized) {
+        print('[SettingPage] BackendManager 未初始化，等待 initialize()...');
+        await BackendManager.instance.initialize();
+        print('[SettingPage] BackendManager.initialize() 完成');
+      }
+
+      // 加载设置
       final data = await BackendManager.instance.loadSettings();
-      final books = await BackendManager.instance.loadWordBooks();
+      print('[SettingPage] loadSettings 返回: ${data}');
+
+      // 初始化完成后 hotDb 就绪，再调用 loadWordBooks
+      // 增加重试逻辑：如果词书为空，延迟后重试最多 3 次
+      List<WordBookModel> books = [];
+      for (int retry = 0; retry < 3; retry++) {
+        books = await BackendManager.instance.loadWordBooks();
+        print('[SettingPage] loadWordBooks 第 ${retry + 1} 次返回: ${books.length} 个词书');
+        if (books.isNotEmpty) break;
+        if (retry < 2) {
+          await Future.delayed(Duration(milliseconds: 500 * (retry + 1)));
+          print('[SettingPage] 词书列表为空，${(retry + 1) * 500}ms 后重试...');
+        }
+      }
+      if (books.isEmpty) {
+        print('[SettingPage] 警告：词书列表仍然为空');
+      }
+
+      // 获取词库统计，增加异常处理
+      Map<String, int> stats = {};
+      try {
+        stats = await BackendManager.instance.getDatabaseStats();
+        print('[SettingPage] getDatabaseStats 返回: $stats');
+      } catch (statsError) {
+        print('[SettingPage] getDatabaseStats 异常: $statsError');
+        stats = {'error': -1};
+      }
 
       if (!_disposed) {
         updatePage(() {
           settingsData = data;
           wordBooks = books;
+          dbStats = stats;
           isLoading = false;
+          loadError = null;
           currentBook = data.currentBook;
           singleSessionLimit = data.singleSessionLimit;
           showEtymology = data.showEtymology;
@@ -84,8 +130,15 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
           dailyRefreshHour = data.dailyRefreshHour;
         });
       }
-    } catch (e) {
-      if (!_disposed) updatePage(() => isLoading = false);
+    } catch (e, st) {
+      print('[SettingPage] _loadData 异常: $e\n$st');
+      if (!_disposed) {
+        updatePage(() {
+          isLoading = false;
+          dbStats = {'error': -1};
+          loadError = e.toString();
+        });
+      }
     }
   }
 

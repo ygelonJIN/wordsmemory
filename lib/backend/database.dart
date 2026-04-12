@@ -2,12 +2,23 @@ library wordmemory.database;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+
+// ============================================================================
+// 辅助函数
+// ============================================================================
+
+/// 判断 Unicode 码点是否为 ASCII 字母（a-z / A-Z），不依赖 RegExp 以保证性能
+bool _isAlpha(int codeUnit) {
+  return (codeUnit >= 0x61 && codeUnit <= 0x7a) ||
+         (codeUnit >= 0x41 && codeUnit <= 0x5a);
+}
 
 // ============================================================================
 // WordMemory SRS - Database Schema
@@ -43,8 +54,14 @@ const String kTableUserSettings = 'User_Settings';
 
 String _dbPath(String name, String dbDir) => join(dbDir, name);
 
-Future<void> _attachRomDb(Database db, String romPath) async {
-  await db.execute("ATTACH DATABASE ? AS rom_db", [romPath]);
+/// 检查 asset 是否存在（通过尝试加载判断）
+Future<bool> _assetExists(String assetPath) async {
+  try {
+    await rootBundle.loadString(assetPath);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // ============================================================================
@@ -53,6 +70,7 @@ Future<void> _attachRomDb(Database db, String romPath) async {
 
 const String kCreateNoteSql = '''
 CREATE TABLE Note (
+    -- 核心字段
     Concept_UUID TEXT PRIMARY KEY,
     Spelling TEXT NOT NULL,
     Phonetic TEXT NOT NULL,
@@ -60,29 +78,57 @@ CREATE TABLE Note (
     Etymology_JSON TEXT,
     Micro_Context_JSON TEXT NOT NULL,
     Content_JSON TEXT NOT NULL,
+
+    -- ECDICT 词频
     BNC INTEGER DEFAULT 0,
     FRQ INTEGER DEFAULT 0,
+
+    -- 柯林斯星级（来自 ecdict.csv collins 列，0-5）
     Collins_Star INTEGER DEFAULT 0,
+
+    -- 英语释义（来自 ecdict.csv definition 列）
     Definition_En TEXT,
+
+    -- 例句（来自 ecdict.csv detail 列）
     Example_Sentence TEXT,
+
+    -- 时态/变形（完整解析 ecdict.csv exchange 列）
     Past_Tense TEXT,
     Past_Participle TEXT,
-    Part_Of_Speech TEXT
+    Present_Participle TEXT,
+    Third_Person TEXT,
+    Comparative TEXT,
+    Superlative TEXT,
+    Plural TEXT,
+    Lemma TEXT,
+    Lemma_Variant TEXT,
+
+    -- 词性（解析 ecdict.csv pos 列，取占比最高的词性）
+    Part_Of_Speech TEXT,
+
+    -- 词书标签（解析 ecdict.csv tag 列，JSON 数组）
+    Tag_List TEXT,
+
+    -- 近义词辨析（来自 resemble.txt，完整 JSON）
+    Synonym_JSON TEXT,
+
+    -- Oxford 标识
+    Is_Oxford INTEGER DEFAULT 0,
+    Oxford_3000 INTEGER DEFAULT 0,
+    Oxford_5000 INTEGER DEFAULT 0
 ) STRICT;
 ''';
 
-const String kCreateCollinsStarSql = '''
-CREATE TABLE Collins_Star (
-    Spelling TEXT PRIMARY KEY,
-    Star INTEGER NOT NULL
+/// Resemble 表：存储 ECDICT resemble.txt 近义词辨析数据
+/// 每个词组一行，Word_List 唯一（UNIQUE 约束）
+const String kCreateResembleSql = '''
+CREATE TABLE Resemble (
+    Group_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Word_List TEXT NOT NULL UNIQUE,
+    Group_Title TEXT NOT NULL,
+    Detail_JSON TEXT NOT NULL
 ) STRICT;
-''';
-
-const String kCreateEnglishDefSql = '''
-CREATE TABLE English_Definition (
-    Spelling TEXT PRIMARY KEY,
-    Definition_En TEXT NOT NULL
-) STRICT;
+CREATE INDEX idx_resemble_wordlist ON Resemble(Word_List);
 ''';
 
 const String kCreateTreeRootSql = '''
@@ -90,7 +136,11 @@ CREATE TABLE Tree_Root (
     Root_ID TEXT PRIMARY KEY,
     Root_Name TEXT NOT NULL,
     Root_Definition TEXT NOT NULL,
-    Root_Group TEXT NOT NULL
+    Root_Group TEXT NOT NULL,
+    Root_Origin TEXT DEFAULT '',
+    Root_Function TEXT DEFAULT '',
+    Root_Synonyms TEXT DEFAULT '',
+    Root_Antonyms TEXT DEFAULT ''
 ) STRICT;
 ''';
 
@@ -100,8 +150,6 @@ CREATE TABLE Tree_Word (
     Root_ID TEXT NOT NULL,
     Concept_UUID TEXT NOT NULL,
     Compound_Form TEXT NOT NULL,
-    Compound_Meaning TEXT NOT NULL,
-    Final_Meaning TEXT NOT NULL,
     Sort_Order INTEGER DEFAULT 0,
     FOREIGN KEY (Root_ID) REFERENCES Tree_Root(Root_ID),
     FOREIGN KEY (Concept_UUID) REFERENCES Note(Concept_UUID)
@@ -145,7 +193,8 @@ CREATE TABLE Card (
     Favorite INTEGER DEFAULT 0,
     Topic_Read INTEGER DEFAULT 0,
     Tree_Visit INTEGER DEFAULT 0,
-    Random_Sort_ID INTEGER NOT NULL
+    Random_Sort_ID INTEGER NOT NULL,
+    Tag_List TEXT
 ) STRICT;
 CREATE INDEX idx_card_schedule ON Card(Next_Review_Date, (Status & 0x0F));
 CREATE INDEX idx_card_uuid ON Card(Concept_UUID);
@@ -218,8 +267,7 @@ Future<Database> openRomDatabase(String dbDir) async {
       await db.execute('PRAGMA journal_mode=WAL');
       await db.execute('PRAGMA wal_autocheckpoint=1000');
       await db.execute(kCreateNoteSql);
-      await db.execute(kCreateCollinsStarSql);
-      await db.execute(kCreateEnglishDefSql);
+      await db.execute(kCreateResembleSql);
       await db.execute(kCreateTreeRootSql);
       await db.execute(kCreateTreeWordSql);
       await db.execute(kCreateTopicSql);
@@ -238,19 +286,15 @@ Future<Database> openRomDatabase(String dbDir) async {
 
 /// 确保 ROM 数据完整性。如果 Tree_Root 表为空则重新写入结构树示例数据
 ///
-/// 注意：如果需要加载 ECDICT 预生成数据库：
-/// 1. 将 ECDICT 转换工具输出的 wordmemory_rom.db 复制到应用私有目录
-/// 2. 该文件已有数据，不会触发此处补种逻辑
-/// 3. 如果 ROM 文件存在但 Tree_Root 表为空，说明新数据库未包含结构树数据，会触发补种
+/// 如果 ROM 文件存在但 Tree_Root 表为空，从预编译 DB 加载结构树数据
 Future<void> _ensureRomDataIntegrity(Database db) async {
   print('[DB] _ensureRomDataIntegrity 开始');
-  // 检查 Tree_Root 表（而非 Note 表），因为 _seedSemanticReadingData 会先写入科技阅读的 Note，
-  // 导致 Note > 0 时 _seedRomData 仍可能未执行（Tree_Root/Tree_Word 仍为空）。
   final rootCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM Tree_Root'));
   print('[DB] _ensureRomDataIntegrity Tree_Root数量=$rootCount');
   if (rootCount == null || rootCount == 0) {
-    print('[DB] _ensureRomDataIntegrity Tree_Root为空，执行 _seedRomData...');
-    await _seedRomData(db);
+    print('[DB] _ensureRomDataIntegrity Tree_Root为空，从预编译 DB 加载...');
+    // 预编译 DB 数据在 seedHotDataIfNeeded → _loadFromPrebuiltDb 中处理
+    // 此处仅保留空实现，由热库初始化统一触发
     print('[DB] _ensureRomDataIntegrity 补种完成');
   } else {
     print('[DB] _ensureRomDataIntegrity Tree_Root已有 ${rootCount} 条，使用已有数据');
@@ -262,468 +306,6 @@ Future<void> _ensureRomDataIntegrity(Database db) async {
 Future<void> ensureRomDataIntegrity(Database db) => _ensureRomDataIntegrity(db);
 
 // ============================================================================
-// ROM 示例数据初始化
-// ============================================================================
-
-Future<void> _seedRomData(Database db) async {
-  // 先清空旧的结构树和文章数据（保留其他词汇）
-  await db.delete(kTableTreeWord);
-  await db.delete(kTableTreeRoot);
-  await db.delete(kTableArticle);
-  await db.delete(kTableTopic);
-
-  // --------------------------------------------------------------------------
-  // Note 数据（re/trans 词根系列 + 旧有词，共约 70 个）
-  // --------------------------------------------------------------------------
-  final notes = <Map<String, dynamic>>[
-    // ======================== re- 系列（25个）========================
-    {
-      'Concept_UUID': 'note_reassure',
-      'Spelling': 'reassure',
-      'Phonetic': '/ˌriːəˈʃɔː/',
-      'Definition': 'v. 使安心；使确信',
-      'Etymology_JSON': '{"prefix":"re-=再/重新","root":"assure=使确信","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Her smile reassured me.","zh":"她的微笑使我安心。"}',
-      'Content_JSON': '{"spelling":"reassure","phonetic":"/ˌriːəˈʃɔː/","definition":"v. 使安心；使确信","etymology":"re-=再+assure=使确信→再次使确信→使安心","example":"Her smile reassured me.","translation":"她的微笑使我安心。"}',
-    },
-    {
-      'Concept_UUID': 'note_recollect',
-      'Spelling': 'recollect',
-      'Phonetic': '/ˌrekəˈlekt/',
-      'Definition': 'v. 回忆起；想起',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"collect=收集","suffix":""}',
-      'Micro_Context_JSON': '{"en":"I tried to recollect her name.","zh":"我努力回忆她的名字。"}',
-      'Content_JSON': '{"spelling":"recollect","phonetic":"/ˌrekəˈlekt/","definition":"v. 回忆起；想起","etymology":"re-=重新+collect=收集→重新收集→回忆起","example":"I tried to recollect her name.","translation":"我努力回忆她的名字。"}',
-    },
-    {
-      'Concept_UUID': 'note_reconcile',
-      'Spelling': 'reconcile',
-      'Phonetic': '/ˈrekənsaɪl/',
-      'Definition': 'v. 和解；调解；使一致',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"concile=召集/使和好","suffix":""}',
-      'Micro_Context_JSON': '{"en":"They finally reconciled after a long dispute.","zh":"经过长时间的争执，他们终于和解了。"}',
-      'Content_JSON': '{"spelling":"reconcile","phonetic":"/ˈrekənsaɪl/","definition":"v. 和解；调解；使一致","etymology":"re-=重新+concile=召集→重新召集到一起→和解","example":"They finally reconciled after a long dispute.","translation":"经过长时间的争执，他们终于和解了。"}',
-    },
-    {
-      'Concept_UUID': 'note_reproduce',
-      'Spelling': 'reproduce',
-      'Phonetic': '/ˌriːprəˈdjuːs/',
-      'Definition': 'v. 繁殖；复制；再生',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"produce=生产","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The device can reproduce images perfectly.","zh":"这台设备能完美地复制图像。"}',
-      'Content_JSON': '{"spelling":"reproduce","phonetic":"/ˌriːprəˈdjuːs/","definition":"v. 繁殖；复制；再生","etymology":"re-=重新+produce=生产→重新生产→繁殖","example":"The device can reproduce images perfectly.","translation":"这台设备能完美地复制图像。"}',
-    },
-    {
-      'Concept_UUID': 'note_request',
-      'Spelling': 'request',
-      'Phonetic': '/rɪˈkwest/',
-      'Definition': 'v. 请求；要求 n. 请求',
-      'Etymology_JSON': '{"prefix":"re-=一再","root":"quest=寻求","suffix":""}',
-      'Micro_Context_JSON': '{"en":"I made a request for more information.","zh":"我请求更多信息。"}',
-      'Content_JSON': '{"spelling":"request","phonetic":"/rɪˈkwest/","definition":"v. 请求；要求 n. 请求","etymology":"re-=一再+quest=寻求→一再寻求→请求","example":"I made a request for more information.","translation":"我请求更多信息。"}',
-    },
-    {
-      'Concept_UUID': 'note_recommend',
-      'Spelling': 'recommend',
-      'Phonetic': '/ˌrekəˈmend/',
-      'Definition': 'v. 推荐；建议',
-      'Etymology_JSON': '{"prefix":"re-=再次/一再","root":"commend=称赞/托付","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Can you recommend a good restaurant?","zh":"你能推荐一家好餐厅吗？"}',
-      'Content_JSON': '{"spelling":"recommend","phonetic":"/ˌrekəˈmend/","definition":"v. 推荐；建议","etymology":"re-=再次+commend=称赞→再次称赞→推荐","example":"Can you recommend a good restaurant?","translation":"你能推荐一家好餐厅吗？"}',
-    },
-    {
-      'Concept_UUID': 'note_recompense',
-      'Spelling': 'recompense',
-      'Phonetic': '/ˈrekəmpens/',
-      'Definition': 'v. 赔偿；补偿 n. 赔偿金',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"compense=称量/补偿","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The company offered to recompense the victims.","zh":"公司提出赔偿受害者。"}',
-      'Content_JSON': '{"spelling":"recompense","phonetic":"/ˈrekəmpens/","definition":"v. 赔偿；补偿 n. 赔偿金","etymology":"re-=重新+compense=称量→重新称量→重新补偿→赔偿","example":"The company offered to recompense the victims.","translation":"公司提出赔偿受害者。"}',
-    },
-    {
-      'Concept_UUID': 'note_restrain',
-      'Spelling': 'restrain',
-      'Phonetic': '/rɪˈstreɪn/',
-      'Definition': 'v. 抑制；阻止；约束',
-      'Etymology_JSON': '{"prefix":"re-=向后","root":"strain=拉紧","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The police restrained the crowd.","zh":"警察阻止了人群。"}',
-      'Content_JSON': '{"spelling":"restrain","phonetic":"/rɪˈstreɪn/","definition":"v. 抑制；阻止；约束","etymology":"re-=向后+strain=拉紧→往回拉紧→抑制","example":"The police restrained the crowd.","translation":"警察阻止了人群。"}',
-    },
-    {
-      'Concept_UUID': 'note_retail',
-      'Spelling': 'retail',
-      'Phonetic': '/ˈriːteɪl/',
-      'Definition': 'v. 零售 n. 零售 adj. 零售的',
-      'Etymology_JSON': '{"prefix":"re-=再次","root":"tail=切割","suffix":""}',
-      'Micro_Context_JSON': '{"en":"They retail products at a discount.","zh":"他们以折扣价零售商品。"}',
-      'Content_JSON': '{"spelling":"retail","phonetic":"/ˈriːteɪl/","definition":"v. 零售 n. 零售 adj. 零售的","etymology":"re-=再次+tail=切割→再次切割→分割销售→零售","example":"They retail products at a discount.","translation":"他们以折扣价零售商品。"}',
-    },
-    {
-      'Concept_UUID': 'note_revolve',
-      'Spelling': 'revolve',
-      'Phonetic': '/rɪˈvɒlv/',
-      'Definition': 'v. 旋转；环绕；反复思考',
-      'Etymology_JSON': '{"prefix":"re-=一再","root":"volve=滚动/转动","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The earth revolves around the sun.","zh":"地球绕太阳旋转。"}',
-      'Content_JSON': '{"spelling":"revolve","phonetic":"/rɪˈvɒlv/","definition":"v. 旋转；环绕；反复思考","etymology":"re-=一再+volve=滚动→一再滚动→旋转","example":"The earth revolves around the sun.","translation":"地球绕太阳旋转。"}',
-    },
-    {
-      'Concept_UUID': 'note_refresh',
-      'Spelling': 'refresh',
-      'Phonetic': '/rɪˈfreʃ/',
-      'Definition': 'v. 使恢复；使振作；刷新',
-      'Etymology_JSON': '{"prefix":"re-=再次","root":"fresh=新鲜的","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Press F5 to refresh the page.","zh":"按F5刷新页面。"}',
-      'Content_JSON': '{"spelling":"refresh","phonetic":"/rɪˈfreʃ/","definition":"v. 使恢复；使振作；刷新","etymology":"re-=再次+fresh=新鲜的→再次变新鲜→刷新","example":"Press F5 to refresh the page.","translation":"按F5刷新页面。"}',
-    },
-    {
-      'Concept_UUID': 'note_remark',
-      'Spelling': 'remark',
-      'Phonetic': '/rɪˈmɑːk/',
-      'Definition': 'v. 评论；谈论 n. 评论；注意',
-      'Etymology_JSON': '{"prefix":"re-=一再","root":"mark=标记","suffix":""}',
-      'Micro_Context_JSON': '{"en":"She remarked on his excellent performance.","zh":"她评论了他的出色表现。"}',
-      'Content_JSON': '{"spelling":"remark","phonetic":"/rɪˈmɑːk/","definition":"v. 评论；谈论 n. 评论；注意","etymology":"re-=一再+mark=标记→一再标记→加以标注→评论","example":"She remarked on his excellent performance.","translation":"她评论了他的出色表现。"}',
-    },
-    {
-      'Concept_UUID': 'note_remarkable',
-      'Spelling': 'remarkable',
-      'Phonetic': '/rɪˈmɑːkəbl/',
-      'Definition': 'adj. 卓越的；非凡的；值得注意的',
-      'Etymology_JSON': '{"prefix":"re-=一再","root":"mark=标记","suffix":"-able=值得...的"}',
-      'Micro_Context_JSON': '{"en":"This is a remarkable achievement.","zh":"这是一项非凡的成就。"}',
-      'Content_JSON': '{"spelling":"remarkable","phonetic":"/rɪˈmɑːkəbl/","definition":"adj. 卓越的；非凡的；值得注意的","etymology":"re-=一再+mark=标记+-able=值得...的→值得一再标记的→卓越的","example":"This is a remarkable achievement.","translation":"这是一项非凡的成就。"}',
-    },
-    {
-      'Concept_UUID': 'note_recite',
-      'Spelling': 'recite',
-      'Phonetic': '/rɪˈsaɪt/',
-      'Definition': 'v. 背诵；朗读；列举',
-      'Etymology_JSON': '{"prefix":"re-=再次","root":"cite=唤起/引用","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The student recited the poem fluently.","zh":"学生流利地背诵了这首诗。"}',
-      'Content_JSON': '{"spelling":"recite","phonetic":"/rɪˈsaɪt/","definition":"v. 背诵；朗读；列举","etymology":"re-=再次+cite=唤起→再次唤起记忆→背诵","example":"The student recited the poem fluently.","translation":"学生流利地背诵了这首诗。"}',
-    },
-    {
-      'Concept_UUID': 'note_renaissance',
-      'Spelling': 'renaissance',
-      'Phonetic': '/rɪˈneɪsəns/',
-      'Definition': 'n. 文艺复兴；复兴；复活',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"naissance=诞生","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The Renaissance transformed European culture.","zh":"文艺复兴改变了欧洲文化。"}',
-      'Content_JSON': '{"spelling":"renaissance","phonetic":"/rɪˈneɪsəns/","definition":"n. 文艺复兴；复兴；复活","etymology":"re-=重新+naissance=诞生→重新诞生→文艺复兴","example":"The Renaissance transformed European culture.","translation":"文艺复兴改变了欧洲文化。"}',
-    },
-    {
-      'Concept_UUID': 'note_recount',
-      'Spelling': 'recount',
-      'Phonetic': '/rɪˈkaʊnt/',
-      'Definition': 'v. 重新计算；叙述；讲述',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"count=计算","suffix":""}',
-      'Micro_Context_JSON': '{"en":"She recounted her adventures in detail.","zh":"她详细叙述了她的冒险经历。"}',
-      'Content_JSON': '{"spelling":"recount","phonetic":"/rɪˈkaʊnt/","definition":"v. 重新计算；叙述；讲述","etymology":"re-=重新+count=计算→重新计算→叙述","example":"She recounted her adventures in detail.","translation":"她详细叙述了她的冒险经历。"}',
-    },
-    {
-      'Concept_UUID': 'note_renovation',
-      'Spelling': 'renovation',
-      'Phonetic': '/ˌrenəˈveɪʃn/',
-      'Definition': 'n. 翻修；革新；装修',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"nov=新","suffix":"-ation=行为/结果"}',
-      'Micro_Context_JSON': '{"en":"The house needs renovation.","zh":"这房子需要翻修。"}',
-      'Content_JSON': '{"spelling":"renovation","phonetic":"/ˌrenəˈveɪʃn/","definition":"n. 翻修；革新；装修","etymology":"re-=重新+nov=新+-ation=行为→重新造新→翻修","example":"The house needs renovation.","translation":"这房子需要翻修。"}',
-    },
-    {
-      'Concept_UUID': 'note_reinforce',
-      'Spelling': 'reinforce',
-      'Phonetic': '/ˌriːɪnˈfɔːs/',
-      'Definition': 'v. 加强；增援；巩固',
-      'Etymology_JSON': '{"prefix":"re-=再次","root":"inforce=enforce=加强","suffix":""}',
-      'Micro_Context_JSON': '{"en":"We need to reinforce the walls.","zh":"我们需要加固墙壁。"}',
-      'Content_JSON': '{"spelling":"reinforce","phonetic":"/ˌriːɪnˈfɔːs/","definition":"v. 加强；增援；巩固","etymology":"re-=再次+inforce=加强→再次加强→强化","example":"We need to reinforce the walls.","translation":"我们需要加固墙壁。"}',
-    },
-    {
-      'Concept_UUID': 'note_renew',
-      'Spelling': 'renew',
-      'Phonetic': '/rɪˈnjuː/',
-      'Definition': 'v. 更新；续签；使恢复',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"new=新的","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Please renew your subscription online.","zh":"请在网上续订您的订阅。"}',
-      'Content_JSON': '{"spelling":"renew","phonetic":"/rɪˈnjuː/","definition":"v. 更新；续签；使恢复","etymology":"re-=重新+new=新的→重新变新→更新","example":"Please renew your subscription online.","translation":"请在网上续订您的订阅。"}',
-    },
-    {
-      'Concept_UUID': 'note_require',
-      'Spelling': 'require',
-      'Phonetic': '/rɪˈkwaɪə/',
-      'Definition': 'v. 需要；要求；命令',
-      'Etymology_JSON': '{"prefix":"re-=一再","root":"quire=寻求/询问","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The job requires experience.","zh":"这份工作需要经验。"}',
-      'Content_JSON': '{"spelling":"require","phonetic":"/rɪˈkwaɪə/","definition":"v. 需要；要求；命令","etymology":"re-=一再+quire=寻求→一再寻求→需要","example":"The job requires experience.","translation":"这份工作需要经验。"}',
-    },
-    {
-      'Concept_UUID': 'note_replace',
-      'Spelling': 'replace',
-      'Phonetic': '/rɪˈpleɪs/',
-      'Definition': 'v. 替换；取代；把...放回原处',
-      'Etymology_JSON': '{"prefix":"re-=重新","root":"place=放置","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Can you replace the broken light bulb?","zh":"你能换掉烧坏的灯泡吗？"}',
-      'Content_JSON': '{"spelling":"replace","phonetic":"/rɪˈpleɪs/","definition":"v. 替换；取代；把...放回原处","etymology":"re-=重新+place=放置→重新放置→替换","example":"Can you replace the broken light bulb?","translation":"你能换掉烧坏的灯泡吗？"}',
-    },
-    {
-      'Concept_UUID': 'note_register',
-      'Spelling': 'register',
-      'Phonetic': '/ˈredʒɪstə/',
-      'Definition': 'v. 登记；注册；记录 n. 登记表',
-      'Etymology_JSON': '{"prefix":"re-=带回","root":"gister=带来/记录","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Please register for the course online.","zh":"请在网上注册这门课程。"}',
-      'Content_JSON': '{"spelling":"register","phonetic":"/ˈredʒɪstə/","definition":"v. 登记；注册；记录 n. 登记表","etymology":"re-=带回+gister=带来→带回来记录→登记","example":"Please register for the course online.","translation":"请在网上注册这门课程。"}',
-    },
-    {
-      'Concept_UUID': 'note_resemble',
-      'Spelling': 'resemble',
-      'Phonetic': '/rɪˈzembl/',
-      'Definition': 'v. 类似；像；相似',
-      'Etymology_JSON': '{"prefix":"re-=再次","root":"semble=相似","suffix":""}',
-      'Micro_Context_JSON': '{"en":"She resembles her mother closely.","zh":"她很像她的母亲。"}',
-      'Content_JSON': '{"spelling":"resemble","phonetic":"/rɪˈzembl/","definition":"v. 类似；像；相似","etymology":"re-=再次+semble=相似→再次相似→类似","example":"She resembles her mother closely.","translation":"她很像她的母亲。"}',
-    },
-    {
-      'Concept_UUID': 'note_resemblance',
-      'Spelling': 'resemblance',
-      'Phonetic': '/rɪˈzembləns/',
-      'Definition': 'n. 相似；相似之处；相像程度',
-      'Etymology_JSON': '{"prefix":"re-=再次","root":"semblance=相似的样子","suffix":""}',
-      'Micro_Context_JSON': '{"en":"There is a strong resemblance between them.","zh":"他们之间有很强的相似之处。"}',
-      'Content_JSON': '{"spelling":"resemblance","phonetic":"/rɪˈzembləns/","definition":"n. 相似；相似之处；相像程度","etymology":"re-=再次+semblance=相似的样子→再次相似的状态→相似之处","example":"There is a strong resemblance between them.","translation":"他们之间有很强的相似之处。"}',
-    },
-    {
-      'Concept_UUID': 'note_remain',
-      'Spelling': 'remain',
-      'Phonetic': '/rɪˈmeɪn/',
-      'Definition': 'v. 保持；留下；剩余',
-      'Etymology_JSON': '{"prefix":"re-=向后","root":"main=停留（=manere）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Please remain seated until the bus stops.","zh":"请在公共汽车停下之前保持坐着。"}',
-      'Content_JSON': '{"spelling":"remain","phonetic":"/rɪˈmeɪn/","definition":"v. 保持；留下；剩余","etymology":"re-=向后+main=停留→向后停留→保持","example":"Please remain seated until the bus stops.","translation":"请在公共汽车停下之前保持坐着。"}',
-    },
-    {
-      'Concept_UUID': 'note_restrict',
-      'Spelling': 'restrict',
-      'Phonetic': '/rɪˈstrɪkt/',
-      'Definition': 'v. 限制；约束；限定',
-      'Etymology_JSON': '{"prefix":"re-=往回","root":"strict=拉紧/严格","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Speed is restricted to 60 km/h here.","zh":"这里限速60公里/小时。"}',
-      'Content_JSON': '{"spelling":"restrict","phonetic":"/rɪˈstrɪkt/","definition":"v. 限制；约束；限定","etymology":"re-=往回+strict=拉紧→往回拉紧→限制","example":"Speed is restricted to 60 km/h here.","translation":"这里限速60公里/小时。"}',
-    },
-    // ======================== trans- 系列（15个）========================
-    {
-      'Concept_UUID': 'note_transfer',
-      'Spelling': 'transfer',
-      'Phonetic': '/trænsˈfɜː/',
-      'Definition': 'v. 转移；转学；转让 n. 转移；转让',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"fer=携带/搬运","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Please transfer the files to the server.","zh":"请把文件转移到服务器上。"}',
-      'Content_JSON': '{"spelling":"transfer","phonetic":"/trænsˈfɜː/","definition":"v. 转移；转学；转让 n. 转移；转让","etymology":"trans-=跨越+fer=携带→跨越携带→转移","example":"Please transfer the files to the server.","translation":"请把文件转移到服务器上。"}',
-    },
-    {
-      'Concept_UUID': 'note_translate',
-      'Spelling': 'translate',
-      'Phonetic': '/trænzˈleɪt/',
-      'Definition': 'v. 翻译；转化；解释',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"late=搬运/携带（lat=携带）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Can you translate this sentence into English?","zh":"你能把这句话翻译成英语吗？"}',
-      'Content_JSON': '{"spelling":"translate","phonetic":"/trænzˈleɪt/","definition":"v. 翻译；转化；解释","etymology":"trans-=跨越+late=搬运→跨越搬运→翻译","example":"Can you translate this sentence into English?","translation":"你能把这句话翻译成英语吗？"}',
-    },
-    {
-      'Concept_UUID': 'note_transmit',
-      'Spelling': 'transmit',
-      'Phonetic': '/trænzˈmɪt/',
-      'Definition': 'v. 传输；发送；传播；传达',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"mit=发送（=mittere）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The station transmits news around the world.","zh":"电台向全世界发送新闻。"}',
-      'Content_JSON': '{"spelling":"transmit","phonetic":"/trænzˈmɪt/","definition":"v. 传输；发送；传播；传达","etymology":"trans-=跨越+mit=发送→跨越发送→传输","example":"The station transmits news around the world.","translation":"电台向全世界发送新闻。"}',
-    },
-    {
-      'Concept_UUID': 'note_transport',
-      'Spelling': 'transport',
-      'Phonetic': '/trænzˈpɔːt/',
-      'Definition': 'v. 运输；运送 n. 运输；运输工具',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"port=搬运/携带","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Trucks transport goods across the country.","zh":"卡车将货物运往全国各地。"}',
-      'Content_JSON': '{"spelling":"transport","phonetic":"/trænzˈpɔːt/","definition":"v. 运输；运送 n. 运输；运输工具","etymology":"trans-=跨越+port=搬运→跨越搬运→运输","example":"Trucks transport goods across the country.","translation":"卡车将货物运往全国各地。"}',
-    },
-    {
-      'Concept_UUID': 'note_transform',
-      'Spelling': 'transform',
-      'Phonetic': '/trænzˈfɔːm/',
-      'Definition': 'v. 改变；改造；使变形',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"form=形状/形态","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The city has been transformed over the years.","zh":"这座城市在这些年里发生了巨大的变化。"}',
-      'Content_JSON': '{"spelling":"transform","phonetic":"/trænzˈfɔːm/","definition":"v. 改变；改造；使变形","etymology":"trans-=跨越+form=形状→跨越改变形状→变形","example":"The city has been transformed over the years.","translation":"这座城市在这些年里发生了巨大的变化。"}',
-    },
-    {
-      'Concept_UUID': 'note_transparent',
-      'Spelling': 'transparent',
-      'Phonetic': '/trænsˈpærənt/',
-      'Definition': 'adj. 透明的；显然的；易觉察的',
-      'Etymology_JSON': '{"prefix":"trans-=穿透","root":"parent=显现/出现（parere）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Glass is transparent.","zh":"玻璃是透明的。"}',
-      'Content_JSON': '{"spelling":"transparent","phonetic":"/trænsˈpærənt/","definition":"adj. 透明的；显然的；易觉察的","etymology":"trans-=穿透+parent=显现→穿透显现→透明的","example":"Glass is transparent.","translation":"玻璃是透明的。"}',
-    },
-    {
-      'Concept_UUID': 'note_transplant',
-      'Spelling': 'transplant',
-      'Phonetic': '/trænsˈplɑːnt/',
-      'Definition': 'v. 移植；迁移 n. 移植；器官移植',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"plant=种植","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The surgeon will transplant the kidney tomorrow.","zh":"外科医生明天将进行肾脏移植手术。"}',
-      'Content_JSON': '{"spelling":"transplant","phonetic":"/trænsˈplɑːnt/","definition":"v. 移植；迁移 n. 移植；器官移植","etymology":"trans-=跨越+plant=种植→跨越种植→移植","example":"The surgeon will transplant the kidney tomorrow.","translation":"外科医生明天将进行肾脏移植手术。"}',
-    },
-    {
-      'Concept_UUID': 'note_transaction',
-      'Spelling': 'transaction',
-      'Phonetic': '/trænˈzækʃn/',
-      'Definition': 'n. 交易；业务；办理',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"action=行为/行动","suffix":""}',
-      'Micro_Context_JSON': '{"en":"All transactions are recorded in the system.","zh":"所有交易都在系统中记录。"}',
-      'Content_JSON': '{"spelling":"transaction","phonetic":"/trænˈzækʃn/","definition":"n. 交易；业务；办理","etymology":"trans-=跨越+action=行为→跨越性行为→交易","example":"All transactions are recorded in the system.","translation":"所有交易都在系统中记录。"}',
-    },
-    {
-      'Concept_UUID': 'note_transcend',
-      'Spelling': 'transcend',
-      'Phonetic': '/trænˈsend/',
-      'Definition': 'v. 超越；胜过；超出...的范围',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"scend=攀爬/上升（scandere）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The movie transcends the typical Hollywood formula.","zh":"这部电影超越了典型的好莱坞套路。"}',
-      'Content_JSON': '{"spelling":"transcend","phonetic":"/trænˈsend/","definition":"v. 超越；胜过；超出...的范围","etymology":"trans-=跨越+scend=攀爬→跨越攀爬→超越","example":"The movie transcends the typical Hollywood formula.","translation":"这部电影超越了典型的好莱坞套路。"}',
-    },
-    {
-      'Concept_UUID': 'note_transfuse',
-      'Spelling': 'transfuse',
-      'Phonetic': '/trænsˈfjuːz/',
-      'Definition': 'v. 输注；灌输；渗透',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"fuse=倾倒/注入","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The doctor transfused blood into the patient.","zh":"医生给病人输了血。"}',
-      'Content_JSON': '{"spelling":"transfuse","phonetic":"/trænsˈfjuːz/","definition":"v. 输注；灌输；渗透","etymology":"trans-=跨越+fuse=倾倒→跨越倾倒→输注","example":"The doctor transfused blood into the patient.","translation":"医生给病人输了血。"}',
-    },
-    {
-      'Concept_UUID': 'note_transition',
-      'Spelling': 'transition',
-      'Phonetic': '/trænˈzɪʃn/',
-      'Definition': 'n. 过渡；转变；变迁 v. 转变；过渡',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"it=走（ire）","suffix":"-ion=行为/状态"}',
-      'Micro_Context_JSON': '{"en":"The country is in transition to democracy.","zh":"该国正在向民主过渡。"}',
-      'Content_JSON': '{"spelling":"transition","phonetic":"/trænˈzɪʃn/","definition":"n. 过渡；转变；变迁 v. 转变；过渡","etymology":"trans-=跨越+it=走+-ion=状态→跨越行走的状态→过渡","example":"The country is in transition to democracy.","translation":"该国正在向民主过渡。"}',
-    },
-    {
-      'Concept_UUID': 'note_transgress',
-      'Spelling': 'transgress',
-      'Phonetic': '/trænzˈɡres/',
-      'Definition': 'v. 越界；违背；违反（规则、法律等）',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"gress=迈步/行走","suffix":""}',
-      'Micro_Context_JSON': '{"en":"No one should transgress the law.","zh":"任何人都不能违法。"}',
-      'Content_JSON': '{"spelling":"transgress","phonetic":"/trænzˈɡres/","definition":"v. 越界；违背；违反（规则、法律等）","etymology":"trans-=跨越+gress=迈步→跨越界限迈步→越界","example":"No one should transgress the law.","translation":"任何人都不能违法。"}',
-    },
-    {
-      'Concept_UUID': 'note_translucent',
-      'Spelling': 'translucent',
-      'Phonetic': '/trænzˈluːsnt/',
-      'Definition': 'adj. 半透明的；透光的',
-      'Etymology_JSON': '{"prefix":"trans-=穿透","root":"lucent=发光/明亮（lucere）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The lampshade is made of translucent glass.","zh":"灯罩是用半透明玻璃制成的。"}',
-      'Content_JSON': '{"spelling":"translucent","phonetic":"/trænzˈluːsnt/","definition":"adj. 半透明的；透光的","etymology":"trans-=穿透+lucent=发光→穿透发光→半透明的","example":"The lampshade is made of translucent glass.","translation":"灯罩是用半透明玻璃制成的。"}',
-    },
-    {
-      'Concept_UUID': 'note_transcribe',
-      'Spelling': 'transcribe',
-      'Phonetic': '/trænˈskraɪb/',
-      'Definition': 'v. 转录；抄写；改编',
-      'Etymology_JSON': '{"prefix":"trans-=跨越","root":"scribe=写","suffix":""}',
-      'Micro_Context_JSON': '{"en":"Please transcribe the interview recording.","zh":"请转录采访录音。"}',
-      'Content_JSON': '{"spelling":"transcribe","phonetic":"/trænˈskraɪb/","definition":"v. 转录；抄写；改编","etymology":"trans-=跨越+scribe=写→跨越写下→转录","example":"Please transcribe the interview recording.","translation":"请转录采访录音。"}',
-    },
-    {
-      'Concept_UUID': 'note_transit',
-      'Spelling': 'transit',
-      'Phonetic': '/ˈtrænzɪt/',
-      'Definition': 'n. 运输；通行；交通运输 v. 通过；穿越',
-      'Etymology_JSON': '{"prefix":"trans-=穿过","root":"it=走（ire）","suffix":""}',
-      'Micro_Context_JSON': '{"en":"The goods are in transit.","zh":"货物正在运输中。"}',
-      'Content_JSON': '{"spelling":"transit","phonetic":"/ˈtrænzɪt/","definition":"n. 运输；通行；交通运输 v. 通过；穿越","etymology":"trans-=穿过+it=走→穿过走→通行","example":"The goods are in transit.","translation":"货物正在运输中。"}',
-    },
-  ];
-
-  for (final note in notes) {
-    await db.insert(kTableNote, note);
-  }
-
-  // --------------------------------------------------------------------------
-  // Tree_Root 数据（2个词根）
-  // --------------------------------------------------------------------------
-  final treeRoots = [
-    {'Root_ID': 'root_re', 'Root_Name': 're', 'Root_Definition': '再、重新、向后', 'Root_Group': 'R'},
-    {'Root_ID': 'root_trans', 'Root_Name': 'trans', 'Root_Definition': '横跨、穿过、跨越', 'Root_Group': 'T'},
-  ];
-
-  for (final root in treeRoots) {
-    await db.insert(kTableTreeRoot, root);
-  }
-
-  // --------------------------------------------------------------------------
-  // Tree_Word 数据（re 和 trans 派生词，严格按用户格式）
-  // --------------------------------------------------------------------------
-  final treeWords = <Map<String, dynamic>>[
-    // re 词根（25个派生词）
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reassure', 'Compound_Form': 're+assure', 'Compound_Meaning': '再次使确信', 'Final_Meaning': '使安心', 'Sort_Order': 1},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recollect', 'Compound_Form': 're+collect', 'Compound_Meaning': '重新收集', 'Final_Meaning': '回忆起', 'Sort_Order': 2},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reconcile', 'Compound_Form': 're+concile', 'Compound_Meaning': '重新协调', 'Final_Meaning': '和解', 'Sort_Order': 3},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reproduce', 'Compound_Form': 're+produce', 'Compound_Meaning': '重新生产', 'Final_Meaning': '繁殖', 'Sort_Order': 4},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_request', 'Compound_Form': 're+quest', 'Compound_Meaning': '一再寻求', 'Final_Meaning': '请求', 'Sort_Order': 5},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recommend', 'Compound_Form': 're+commend', 'Compound_Meaning': '再次赞赏', 'Final_Meaning': '推荐', 'Sort_Order': 6},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recompense', 'Compound_Form': 're+compense', 'Compound_Meaning': '重新补偿', 'Final_Meaning': '赔偿', 'Sort_Order': 7},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_restrain', 'Compound_Form': 're+strain', 'Compound_Meaning': '向后拉紧', 'Final_Meaning': '抑制', 'Sort_Order': 8},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_retail', 'Compound_Form': 're+tail', 'Compound_Meaning': '再次切割', 'Final_Meaning': '零售', 'Sort_Order': 9},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_revolve', 'Compound_Form': 're+volve', 'Compound_Meaning': '一再滚动', 'Final_Meaning': '旋转', 'Sort_Order': 10},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_refresh', 'Compound_Form': 're+fresh', 'Compound_Meaning': '再次新鲜', 'Final_Meaning': '刷新', 'Sort_Order': 11},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_remark', 'Compound_Form': 're+mark', 'Compound_Meaning': '一再标记', 'Final_Meaning': '评论', 'Sort_Order': 12},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_remarkable', 'Compound_Form': 're+mark+able', 'Compound_Meaning': '值得一再标记的', 'Final_Meaning': '卓越的', 'Sort_Order': 13},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recite', 'Compound_Form': 're+cite', 'Compound_Meaning': '再次唤起', 'Final_Meaning': '背诵', 'Sort_Order': 14},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_renaissance', 'Compound_Form': 're+naissance', 'Compound_Meaning': '重新诞生', 'Final_Meaning': '文艺复兴', 'Sort_Order': 15},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_recount', 'Compound_Form': 're+count', 'Compound_Meaning': '重新计算', 'Final_Meaning': '叙述', 'Sort_Order': 16},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_renovation', 'Compound_Form': 're+nov+ation', 'Compound_Meaning': '重新造新', 'Final_Meaning': '翻修', 'Sort_Order': 17},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_reinforce', 'Compound_Form': 're+inforce', 'Compound_Meaning': '再次加强', 'Final_Meaning': '强化', 'Sort_Order': 18},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_renew', 'Compound_Form': 're+new', 'Compound_Meaning': '重新变新', 'Final_Meaning': '更新', 'Sort_Order': 19},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_require', 'Compound_Form': 're+quire', 'Compound_Meaning': '一再寻求', 'Final_Meaning': '需要', 'Sort_Order': 20},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_replace', 'Compound_Form': 're+place', 'Compound_Meaning': '重新放置', 'Final_Meaning': '替换', 'Sort_Order': 21},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_register', 'Compound_Form': 're+gister', 'Compound_Meaning': '带回记录', 'Final_Meaning': '登记', 'Sort_Order': 22},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_resemble', 'Compound_Form': 're+semble', 'Compound_Meaning': '再次相似', 'Final_Meaning': '类似', 'Sort_Order': 23},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_resemblance', 'Compound_Form': 're+semblance', 'Compound_Meaning': '再次相似的状态', 'Final_Meaning': '相似之处', 'Sort_Order': 24},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_remain', 'Compound_Form': 're+main', 'Compound_Meaning': '向后停留', 'Final_Meaning': '保持', 'Sort_Order': 25},
-    {'Root_ID': 'root_re', 'Concept_UUID': 'note_restrict', 'Compound_Form': 're+strict', 'Compound_Meaning': '往回拉紧', 'Final_Meaning': '限制', 'Sort_Order': 26},
-    // trans 词根（15个派生词）
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transfer', 'Compound_Form': 'trans+fer', 'Compound_Meaning': '跨越携带', 'Final_Meaning': '转移', 'Sort_Order': 1},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_translate', 'Compound_Form': 'trans+late', 'Compound_Meaning': '跨越搬运', 'Final_Meaning': '翻译', 'Sort_Order': 2},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transmit', 'Compound_Form': 'trans+mit', 'Compound_Meaning': '跨越发送', 'Final_Meaning': '传输', 'Sort_Order': 3},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transport', 'Compound_Form': 'trans+port', 'Compound_Meaning': '跨越搬运', 'Final_Meaning': '运输', 'Sort_Order': 4},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transform', 'Compound_Form': 'trans+form', 'Compound_Meaning': '跨越改变形状', 'Final_Meaning': '变形', 'Sort_Order': 5},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transparent', 'Compound_Form': 'trans+parent', 'Compound_Meaning': '穿透显现', 'Final_Meaning': '透明的', 'Sort_Order': 6},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transplant', 'Compound_Form': 'trans+plant', 'Compound_Meaning': '跨越种植', 'Final_Meaning': '移植', 'Sort_Order': 7},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transaction', 'Compound_Form': 'trans+action', 'Compound_Meaning': '跨越交互行动', 'Final_Meaning': '交易', 'Sort_Order': 8},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transcend', 'Compound_Form': 'trans+scend', 'Compound_Meaning': '跨越攀爬', 'Final_Meaning': '超越', 'Sort_Order': 9},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transfuse', 'Compound_Form': 'trans+fuse', 'Compound_Meaning': '跨越倾倒', 'Final_Meaning': '输注', 'Sort_Order': 10},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transition', 'Compound_Form': 'trans+it+ion', 'Compound_Meaning': '跨越行走的状态', 'Final_Meaning': '过渡', 'Sort_Order': 11},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transgress', 'Compound_Form': 'trans+gress', 'Compound_Meaning': '跨越界限迈步', 'Final_Meaning': '越界', 'Sort_Order': 12},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_translucent', 'Compound_Form': 'trans+lucent', 'Compound_Meaning': '穿透发光', 'Final_Meaning': '半透明的', 'Sort_Order': 13},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transcribe', 'Compound_Form': 'trans+scribe', 'Compound_Meaning': '跨越写下', 'Final_Meaning': '转录', 'Sort_Order': 14},
-    {'Root_ID': 'root_trans', 'Concept_UUID': 'note_transit', 'Compound_Form': 'trans+it', 'Compound_Meaning': '穿过走', 'Final_Meaning': '通行', 'Sort_Order': 15},
-  ];
-
-  for (final word in treeWords) {
-    await db.insert(kTableTreeWord, word);
-  }
-
-  // --------------------------------------------------------------------------
-  // Topic & Article 数据（仅保留科技阅读专题，语义阅读训练已移除）
-  // 科技阅读专题通过 _seedSemanticReadingData 和 _ensureSemanticReadingDataSeeded 函数管理
-}
-
-// --------------------------------------------------------------------------
 // 语义阅读专题：科技阅读（词级高亮演示）
 // --------------------------------------------------------------------------
 Future<void> _seedSemanticReadingData(Database db) async {
@@ -1023,12 +605,14 @@ Future<void> _initDefaultSettings(Database db) async {
 /// 初始化默认词书数据
 /// 对应 SRS&SDD v2.1 附录 B：词书系统
 Future<void> _seedWordBooks(Database db) async {
+  await db.delete('WordBook');
+
   final books = [
     {
       'Book_ID': 'cet4',
       'Book_Name': 'CET-4',
       'Book_Name_EN': 'College English Test Band 4',
-      'Word_Count': 3000,
+      'Word_Count': 0,
       'Tag_List': 'zk cet4',
       'Description': '大学英语四级词汇',
       'Sort_Order': 1,
@@ -1038,7 +622,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'cet6',
       'Book_Name': 'CET-6',
       'Book_Name_EN': 'College English Test Band 6',
-      'Word_Count': 2500,
+      'Word_Count': 0,
       'Tag_List': 'cet6',
       'Description': '大学英语六级词汇',
       'Sort_Order': 2,
@@ -1048,7 +632,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'kaoyan',
       'Book_Name': '考研',
       'Book_Name_EN': 'Graduate Entrance Exam',
-      'Word_Count': 5500,
+      'Word_Count': 0,
       'Tag_List': 'ky zk cet4 cet6',
       'Description': '考研英语词汇（含四六级核心词）',
       'Sort_Order': 3,
@@ -1058,7 +642,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'toefl',
       'Book_Name': 'TOEFL',
       'Book_Name_EN': 'Test of English as a Foreign Language',
-      'Word_Count': 8000,
+      'Word_Count': 0,
       'Tag_List': 'toefl',
       'Description': '托福学术英语词汇',
       'Sort_Order': 4,
@@ -1068,7 +652,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'ielts',
       'Book_Name': 'IELTS',
       'Book_Name_EN': 'International English Language Testing System',
-      'Word_Count': 6000,
+      'Word_Count': 0,
       'Tag_List': 'ielts',
       'Description': '雅思学术英语词汇',
       'Sort_Order': 5,
@@ -1078,7 +662,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'gre',
       'Book_Name': 'GRE',
       'Book_Name_EN': 'Graduate Record Examination',
-      'Word_Count': 10000,
+      'Word_Count': 0,
       'Tag_List': 'gre',
       'Description': 'GRE 学术类研究生入学考试词汇',
       'Sort_Order': 6,
@@ -1088,7 +672,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'kaoyan2027',
       'Book_Name': '2027考研',
       'Book_Name_EN': '2027 Graduate Entrance Exam',
-      'Word_Count': 6000,
+      'Word_Count': 0,
       'Tag_List': 'ky zk cet4 cet6',
       'Description': '2027届考研英语词汇',
       'Sort_Order': 0,
@@ -1098,262 +682,206 @@ Future<void> _seedWordBooks(Database db) async {
 
   final batch = db.batch();
   for (final book in books) {
-    batch.insert('WordBook', book, conflictAlgorithm: ConflictAlgorithm.ignore);
+    batch.insert('WordBook', book, conflictAlgorithm: ConflictAlgorithm.replace);
   }
   await batch.commit(noResult: true);
-  print('[DB] _seedWordBooks 完成，已写入 ${books.length} 个词书');
+
+  // 验证写入结果
+  final count = (await db.query('WordBook')).length;
+  print('[DB] _seedWordBooks 完成，已写入 ${books.length} 个词书，验证查询: $count 个');
+  if (count != books.length) {
+    print('[DB] 警告：词书数量不匹配，预期 ${books.length}，实际 $count');
+  }
 }
 
-/// 从 ECDICT CSV 文件解析数据，填充 ROM 数据库的 Note 表及辅助表
-/// 流程：1) 解析 sec-edict.csv 星级数据 2) 解析 ecdict.csv 主数据
-Future<void> _loadECDICTIntoRom(Database romDb, Database hotDb) async {
-  print('[DB] _loadECDICTIntoRom 开始');
+// ============================================================================
+// 预编译数据库加载（桌面端 ATTACH / Web 端 JSON）
+// ============================================================================
+
+/// 从预编译 assets/ecdict/ecdict.db 倒入数据到 romDb
+/// 桌面端（非 Web）：复制到 tempDir → ATTACH → INSERT
+/// Web 端：读取分卷 JSON → batch insert
+Future<void> _loadFromPrebuiltDb(Database romDb, Database hotDb) async {
+  print('[DB] _loadFromPrebuiltDb 开始');
+
+  // 步骤 0：读取词书统计，更新 WordBook 词数
+  final countsAsset = 'assets/ecdict/ecdict_book_counts.json';
+  if (await _assetExists(countsAsset)) {
+    try {
+      final raw = jsonDecode(await rootBundle.loadString(countsAsset)) as Map<String, dynamic>;
+      final bookCounts = <String, int>{};
+      for (final e in raw.entries) {
+        bookCounts[e.key] = e.value as int;
+      }
+      if (bookCounts.isNotEmpty) {
+        await _updateWordBookCountsFromMap(hotDb, bookCounts);
+      }
+    } catch (e) {
+      print('[DB] _loadFromPrebuiltDb: 词书统计读取失败: $e');
+    }
+  }
+
+  // 步骤 1：加载 Note + Tree 数据
+  if (kIsWeb) {
+    await _loadPrebuiltNotesToWeb(romDb);
+  } else {
+    await _attachPrebuiltDb(romDb);
+  }
+
+  print('[DB] _loadFromPrebuiltDb 完成');
+}
+
+/// 桌面端：从 assets 复制预编译 .db 到 tempDir，ATTACH，倒入
+Future<void> _attachPrebuiltDb(Database romDb) async {
+  const dbAsset = 'assets/ecdict/ecdict.db';
+  if (!await _assetExists(dbAsset)) {
+    print('[DB] _attachPrebuiltDb: ecdict.db 不存在');
+    return;
+  }
+
+  final ByteData data = await rootBundle.load(dbAsset);
+  final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  print('[DB] _attachPrebuiltDb: 读取 ecdict.db ${bytes.length} bytes');
+
+  final tempDir = await getTemporaryDirectory();
+  final tempPath =
+      '${tempDir.path}/ecdict_prebuilt_${DateTime.now().millisecondsSinceEpoch}.db';
+  final tempFile = File(tempPath);
+  await tempFile.writeAsBytes(bytes);
+
   try {
-    // 获取 ECDICT CSV 文件路径
-    String? ecdictCsvPath = await _findECDICTCsvPath();
-    String? secEdictCsvPath = await _findSecEdictCsvPath();
-    if (ecdictCsvPath == null) {
-      print('[DB] _loadECDICTIntoRom: 找不到 ecdict.csv，跳过');
-      return;
-    }
-    print('[DB] _loadECDICTIntoRom: ecdictCsvPath=$ecdictCsvPath');
+    await romDb.execute("ATTACH DATABASE '\$tempPath' AS prebuilt");
+    try {
+      final noteCount = Sqflite.firstIntValue(
+          await romDb.rawQuery('SELECT COUNT(*) FROM prebuilt.Note')) ?? 0;
+      print('[DB] _attachPrebuiltDb: 预编译 DB 有 $noteCount 条 Note');
 
-    // 读取并解析 sec-edict.csv（星级数据）
-    Map<String, int> collinsStarMap = {};
-    if (secEdictCsvPath != null) {
-      print('[DB] _loadECDICTIntoRom: 读取 sec-edict.csv');
-      try {
-        final secFile = File(secEdictCsvPath);
-        final lines = await secFile.readAsLines();
-        for (int i = 1; i < lines.length; i++) {
-          final line = lines[i].trim();
-          if (line.isEmpty) continue;
-          final parts = _parseCSVLine(line);
-          if (parts.length >= 2) {
-            final word = parts[0].trim().toLowerCase();
-            final star = int.tryParse(parts[1].trim()) ?? 0;
-            if (word.isNotEmpty && star > 0) {
-              collinsStarMap[word] = star;
-            }
-          }
-        }
-        print('[DB] _loadECDICTIntoRom: sec-edict.csv 解析完成，星级条目数=${collinsStarMap.length}');
-      } catch (e) {
-        print('[DB] _loadECDICTIntoRom: sec-edict.csv 读取失败: $e');
+      if (noteCount > 0) {
+        await romDb.execute('INSERT OR REPLACE INTO Note SELECT * FROM prebuilt.Note');
+        await romDb.execute('INSERT OR IGNORE INTO Resemble SELECT * FROM prebuilt.Resemble');
+        await romDb.execute('INSERT OR REPLACE INTO Tree_Root SELECT * FROM prebuilt.Tree_Root');
+        await romDb.execute('INSERT OR IGNORE INTO Tree_Word SELECT * FROM prebuilt.Tree_Word');
       }
+    } finally {
+      await romDb.execute('DETACH DATABASE prebuilt');
     }
-
-    // 将星级数据写入 Collins_Star 辅助表
-    if (collinsStarMap.isNotEmpty) {
-      final starBatch = romDb.batch();
-      for (final entry in collinsStarMap.entries) {
-        starBatch.insert('Collins_Star', {
-          'Spelling': entry.key,
-          'Star': entry.value,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      }
-      await starBatch.commit(noResult: true);
-      print('[DB] _loadECDICTIntoRom: Collins_Star 表写入完成，共 ${collinsStarMap.length} 条');
-    }
-
-    // 读取并解析 ecdict.csv 主数据
-    print('[DB] _loadECDICTIntoRom: 读取 ecdict.csv');
-    final ecdictFile = File(ecdictCsvPath);
-    final lines = await ecdictFile.readAsLines();
-    print('[DB] _loadECDICTIntoRom: ecdict.csv 总行数=${lines.length}');
-
-    // CSV 列索引（基于第1行表头）
-    // word,phonetic,definition,translation,pos,collins,oxford,tag,bnc,frq,exchange,detail,audio
-    final headers = _parseCSVLine(lines[0]);
-    final colIdx = <String, int>{};
-    for (int i = 0; i < headers.length; i++) {
-      colIdx[headers[i].trim()] = i;
-    }
-
-    int noteCount = 0;
-    final noteBatch = romDb.batch();
-    for (int i = 1; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) continue;
-      final parts = _parseCSVLine(line);
-      if (parts.isEmpty) continue;
-
-      String getCol(String name) {
-        final idx = colIdx[name] ?? -1;
-        return idx >= 0 && idx < parts.length ? parts[idx].trim() : '';
-      }
-
-      final word = getCol('word').toLowerCase();
-      if (word.isEmpty) continue;
-
-      final phonetic = getCol('phonetic');
-      final definition = getCol('translation');
-      final pos = getCol('pos');
-      final bncStr = getCol('bnc');
-      final frqStr = getCol('frq');
-      final exchange = getCol('exchange');
-      final example = getCol('detail'); // detail 字段含例句
-
-      // 解析 exchange: d:xxx → 过去式, i:xxx → 过去分词
-      String? pastTense;
-      String? pastParticiple;
-      if (exchange.isNotEmpty) {
-        final exParts = exchange.split('/');
-        for (final ex in exParts) {
-          if (ex.startsWith('d:')) {
-            pastTense = ex.substring(2).trim();
-          } else if (ex.startsWith('i:')) {
-            pastParticiple = ex.substring(2).trim();
-          }
-        }
-      }
-
-      // 构造 Etymology_JSON（复用现有格式）
-      String? etymologyJson;
-      if (exchange.isNotEmpty) {
-        final prefixParts = <String>[];
-        final rootParts = <String>[];
-        for (final ex in exchange.split('/')) {
-          if (ex.startsWith('r:')) {
-            rootParts.add(ex.substring(2).trim());
-          } else if (ex.startsWith('c:')) {
-            rootParts.add(ex.substring(2).trim());
-          } else if (ex.startsWith('p:')) {
-            prefixParts.add(ex.substring(2).trim());
-          } else if (ex.startsWith('s:')) {
-            // suffix
-          }
-        }
-        if (prefixParts.isNotEmpty || rootParts.isNotEmpty) {
-          final parts2 = <String, dynamic>{};
-          if (prefixParts.isNotEmpty) parts2['prefix'] = prefixParts.join(',');
-          if (rootParts.isNotEmpty) parts2['root'] = rootParts.join(',');
-          etymologyJson = jsonEncode(parts2);
-        }
-      }
-
-      // 构造 Micro_Context_JSON（复用现有格式）
-      final microContextJson = jsonEncode({
-        'en': example,
-        'zh': '',
-      });
-
-      // 构造 Content_JSON
-      final contentJson = jsonEncode({
-        'spelling': word,
-        'phonetic': phonetic,
-        'definition': definition,
-        'etymology': etymologyJson ?? '',
-        'example': example,
-        'translation': definition,
-      });
-
-      final bnc = int.tryParse(bncStr) ?? 0;
-      final frq = int.tryParse(frqStr) ?? 0;
-      final collinsStar = collinsStarMap[word] ?? 0;
-
-      noteBatch.insert(kTableNote, {
-        'Concept_UUID': 'note_$word',
-        'Spelling': word,
-        'Phonetic': phonetic,
-        'Definition': definition,
-        'Etymology_JSON': etymologyJson,
-        'Micro_Context_JSON': microContextJson,
-        'Content_JSON': contentJson,
-        'BNC': bnc,
-        'FRQ': frq,
-        'Collins_Star': collinsStar,
-        'Definition_En': definition, // 英语释义即 definition（原文）
-        'Example_Sentence': example,
-        'Past_Tense': pastTense,
-        'Past_Participle': pastParticiple,
-        'Part_Of_Speech': pos,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      noteCount++;
-    }
-
-    await noteBatch.commit(noResult: true);
-    print('[DB] _loadECDICTIntoRom: Note 表写入完成，共 $noteCount 条');
-
-    // 统计各词书词数并更新 WordBook 表
-    await _updateWordBookCounts(romDb, hotDb);
-
-    print('[DB] _loadECDICTIntoRom 完成');
-  } catch (e, st) {
-    print('[DB] _loadECDICTIntoRom 异常: $e\n$st');
+  } finally {
+    try {
+      await tempFile.delete();
+    } catch (_) {}
   }
 }
 
-/// 查找 ecdict.csv 文件路径
-Future<String?> _findECDICTCsvPath() async {
-  // 优先从外部目录查找（用户放置的 ECDICT 文件）
-  if (!kIsWeb) {
-    final externalDir = Directory(r'C:\Users\joss1\Desktop\ECDICT-master');
-    if (await externalDir.exists()) {
-      final csvFile = File(join(externalDir.path, 'ecdict.csv'));
-      if (await csvFile.exists()) {
-        return csvFile.path;
-      }
-    }
+/// Web 端：读取 ecdict_notes_manifest.json，逐卷加载 JSON，批量 insert
+Future<void> _loadPrebuiltNotesToWeb(Database romDb) async {
+  const manifestAsset = 'assets/ecdict/ecdict_notes_manifest.json';
+  if (!await _assetExists(manifestAsset)) {
+    print('[DB] _loadPrebuiltNotesToWeb: manifest 不存在，跳过');
+    return;
   }
-  return null;
-}
 
-/// 查找 sec-edict.csv 文件路径
-Future<String?> _findSecEdictCsvPath() async {
-  if (!kIsWeb) {
-    final externalDir = Directory(r'C:\Users\joss1\Desktop\ECDICT-master');
-    if (await externalDir.exists()) {
-      final csvFile = File(join(externalDir.path, 'sec-edict.csv'));
-      if (await csvFile.exists()) {
-        return csvFile.path;
-      }
-    }
-  }
-  return null;
-}
-
-/// 解析 CSV 行（支持带引号的字段）
-List<String> _parseCSVLine(String line) {
-  final result = <String>[];
-  final buffer = StringBuffer();
-  bool inQuotes = false;
-  for (int i = 0; i < line.length; i++) {
-    final ch = line[i];
-    if (ch == '"') {
-      inQuotes = !inQuotes;
-    } else if (ch == ',' && !inQuotes) {
-      result.add(buffer.toString());
-      buffer.clear();
-    } else {
-      buffer.write(ch);
-    }
-  }
-  result.add(buffer.toString());
-  return result;
-}
-
-/// 根据 ECDICT 数据统计各词书词数并更新 WordBook 表
-Future<void> _updateWordBookCounts(Database romDb, Database hotDb) async {
   try {
-    // 查询 Note 表的词频 BNC > 0 作为有效词汇
-    final notes = await romDb.query('Note', columns: ['Spelling']);
-    if (notes.isEmpty) return;
+    final manifestStr = await rootBundle.loadString(manifestAsset);
+    final manifest = jsonDecode(manifestStr) as Map<String, dynamic>;
+    final chunks = (manifest['chunks'] as List<dynamic>).cast<String>();
 
-    // ECDICT 各词书字段映射到 Book_ID
-    // 注意：由于 ecdict.csv 列名可能不同，这里按实际列名处理
-    // CET4/CET6/TEM4/TEM8/考研/TOEFL/IELTS/GRE/商务 等标签在 tag 列中
-    // 我们从 Note 表的现有数据中估算词书分布，或直接从 CSV 统计
+    for (final chunkFile in chunks) {
+      final chunkAsset = 'assets/ecdict/$chunkFile';
+      if (!await _assetExists(chunkAsset)) continue;
+      final chunkStr = await rootBundle.loadString(chunkAsset);
+      final notes = jsonDecode(chunkStr) as List<dynamic>;
 
-    // 获取当前词书列表
-    final wordBooks = await hotDb.query('WordBook');
-    if (wordBooks.isEmpty) return;
+      final batch = romDb.batch();
+      for (final note in notes) {
+        batch.insert(kTableNote, Map<String, dynamic>.from(note),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await batch.commit(noResult: true);
+    }
 
-    print('[DB] _updateWordBookCounts: 开始统计词书词数');
+    // Web: Resemble + Tree JSON
+    await _loadPrebuiltResembleAndTreeToWeb(romDb);
   } catch (e) {
-    print('[DB] _updateWordBookCounts 异常: $e');
+    print('[DB] _loadPrebuiltNotesToWeb 异常: $e');
   }
 }
+
+/// Web: Resemble + Tree 数据
+Future<void> _loadPrebuiltResembleAndTreeToWeb(Database romDb) async {
+  // Resemble
+  try {
+    const asset = 'assets/ecdict/ecdict_resemble.json';
+    if (await _assetExists(asset)) {
+      final str = await rootBundle.loadString(asset);
+      final rows = jsonDecode(str) as List<dynamic>;
+      final batch = romDb.batch();
+      for (final r in rows) {
+        batch.insert('Resemble', Map<String, dynamic>.from(r),
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      await batch.commit(noResult: true);
+    }
+  } catch (e) {
+    print('[DB] Web Resemble 加载失败: $e');
+  }
+
+  // Tree_Root
+  try {
+    const asset = 'assets/ecdict/ecdict_tree_root.json';
+    if (await _assetExists(asset)) {
+      final str = await rootBundle.loadString(asset);
+      final rows = jsonDecode(str) as List<dynamic>;
+      final batch = romDb.batch();
+      for (final r in rows) {
+        batch.insert(kTableTreeRoot, Map<String, dynamic>.from(r),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await batch.commit(noResult: true);
+    }
+  } catch (e) {
+    print('[DB] Web Tree_Root 加载失败: $e');
+  }
+
+  // Tree_Word 分卷
+  try {
+    const manifestAsset = 'assets/ecdict/ecdict_tree_word_manifest.json';
+    if (!await _assetExists(manifestAsset)) return;
+    final mStr = await rootBundle.loadString(manifestAsset);
+    final manifest = jsonDecode(mStr) as Map<String, dynamic>;
+    final chunks = (manifest['chunks'] as List<dynamic>).cast<String>();
+    for (final chunkFile in chunks) {
+      final chunkAsset = 'assets/ecdict/$chunkFile';
+      if (!await _assetExists(chunkAsset)) continue;
+      final cStr = await rootBundle.loadString(chunkAsset);
+      final rows = jsonDecode(cStr) as List<dynamic>;
+      final batch = romDb.batch();
+      for (final r in rows) {
+        batch.insert(kTableTreeWord, Map<String, dynamic>.from(r),
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      await batch.commit(noResult: true);
+    }
+  } catch (e) {
+    print('[DB] Web Tree_Word 加载失败: $e');
+  }
+}
+
+/// 根据词书统计 Map 批量更新 WordBook 表的 Word_Count
+Future<void> _updateWordBookCountsFromMap(Database db, Map<String, int> bookCounts) async {
+  int updated = 0;
+  for (final entry in bookCounts.entries) {
+    final count = await db.rawUpdate(
+      'UPDATE WordBook SET Word_Count = ? WHERE Book_ID = ?',
+      [entry.value, entry.key],
+    );
+    if (count > 0) updated++;
+  }
+  print('[DB] _updateWordBookCountsFromMap: 更新了 $updated 个词书的词数');
+}
+
+// ============================================================================
+// 种子数据与热库初始化
+// ============================================================================
 
 /// 写入热库种子数据：新用户首次打开时，为 ROM 中的每个 Note 创建一张对应的 Card
 Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
@@ -1361,21 +889,87 @@ Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
   final count = Sqflite.firstIntValue(await hotDb.rawQuery('SELECT COUNT(*) FROM Card'));
   print('[DB] seedHotDataIfNeeded 当前Card数量=$count');
 
-  // 如果 Card 表为空，说明是新用户或 ROM 数据库为空，先尝试从 ECDICT CSV 加载数据
-  if (count == null || count == 0) {
-    print('[DB] seedHotDataIfNeeded Card为空，尝试从 ECDICT CSV 加载...');
-    await _loadECDICTIntoRom(romDb, hotDb);
-    // 重新检查 Note 数量
-    final noteCount = Sqflite.firstIntValue(await romDb.rawQuery('SELECT COUNT(*) FROM Note'));
-    print('[DB] seedHotDataIfNeeded 加载后 Note数量=$noteCount');
-  }
-
   // 确保词书数据已种入
   await _seedWordBooks(hotDb);
 
-  // 再次检查 Card 数量（可能 Note 表之前就非空但 Card 为空）
+  // 如果 Card 表为空或树表为空，从预编译 DB 加载
+  if (count == null || count == 0) {
+    print('[DB] seedHotDataIfNeeded Card为空，从预编译 DB 加载...');
+    await romDb.delete(kTableTreeWord);
+    await romDb.delete(kTableTreeRoot);
+    await _loadFromPrebuiltDb(romDb, hotDb);
+  } else {
+    // Card 非空但树表可能为空
+    final treeRootCount = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Tree_Root')) ?? 0;
+    if (treeRootCount == 0) {
+      print('[DB] seedHotDataIfNeeded 树表为空，从预编译 DB 加载...');
+      await _loadFromPrebuiltDb(romDb, hotDb);
+    }
+  }
+
+  // 再次检查 Card 数量
   final cardCountAfter = Sqflite.firstIntValue(await hotDb.rawQuery('SELECT COUNT(*) FROM Card'));
   if (cardCountAfter != null && cardCountAfter > 0) {
+    // 即使 Card 表已有数据，仍需检查并清理旧词组卡片（如 "incremental duplex"）
+    // Web：Card 和 Note 在不同 IndexedDB，改用 in-memory 过滤
+    // 非 Web：直接 JOIN 查询
+    try {
+      if (kIsWeb) {
+        // Web：遍历所有 Card，清理孤立 Card（ROM 无对应 Note）+ 词组/脏数据 Card
+        final allCards = await hotDb.query(kTableCard, columns: ['Card_ID', 'Concept_UUID']);
+        int orphanDeleted = 0, dirtyDeleted = 0;
+        for (final card in allCards) {
+          final uuid = card['Concept_UUID'] as String?;
+          if (uuid == null) continue;
+          final notes = await romDb.query(
+            kTableNote,
+            columns: ['Spelling'],
+            where: 'Concept_UUID = ?',
+            whereArgs: [uuid],
+            limit: 1,
+          );
+          if (notes.isEmpty) {
+            // ROM 中无对应 Note → 孤立 Card，直接删除
+            await hotDb.delete(kTableCard, where: 'Card_ID = ?', whereArgs: [card['Card_ID']]);
+            orphanDeleted++;
+          } else {
+            final spelling = (notes.first['Spelling'] as String? ?? '').trim();
+            // 过滤词组（包含空格）、不含字母、首/第二字符非法、以 - 或 ' 开头
+            if (spelling.isEmpty || spelling.contains(' ') ||
+                !spelling.contains(RegExp(r'[a-zA-Z]')) ||
+                !_isAlpha(spelling.codeUnitAt(0)) ||
+                (spelling.length >= 2 && !_isAlpha(spelling.codeUnitAt(1))) ||
+                spelling.startsWith('-') || spelling.startsWith("'")) {
+              await hotDb.delete(kTableCard, where: 'Card_ID = ?', whereArgs: [card['Card_ID']]);
+              dirtyDeleted++;
+            }
+          }
+        }
+        print('[DB] seedHotDataIfNeeded 清理完成（Web 模式）：孤立 Card=$orphanDeleted，脏数据 Card=$dirtyDeleted');
+      } else {
+        // 非 Web：直接 JOIN 查询，清理词组/词根词缀/首第二字符非法卡片
+        final phraseCards = await hotDb.rawQuery('''
+          SELECT Card.Card_ID FROM Card
+          JOIN Note ON Card.Concept_UUID = Note.Concept_UUID
+          WHERE (Note.Spelling = '' OR Note.Spelling LIKE '% %'
+             OR NOT Note.Spelling GLOB '*[a-zA-Z]*'
+             OR unicode(substr(Note.Spelling,1,1)) NOT BETWEEN 65 AND 90
+                AND unicode(substr(Note.Spelling,1,1)) NOT BETWEEN 97 AND 122
+             OR (LENGTH(Note.Spelling) >= 2
+                AND unicode(substr(Note.Spelling,2,1)) NOT BETWEEN 65 AND 90
+                AND unicode(substr(Note.Spelling,2,1)) NOT BETWEEN 97 AND 122)
+             OR Note.Spelling LIKE '-%'
+             OR Note.Spelling LIKE "'%")
+        ''');
+        for (final row in phraseCards) {
+          await hotDb.delete(kTableCard, where: 'Card_ID = ?', whereArgs: [row['Card_ID']]);
+        }
+        print('[DB] seedHotDataIfNeeded 清理了 ${phraseCards.length} 张词组/词根词缀卡片（非 Web 模式）');
+      }
+    } catch (e) {
+      print('[DB] seedHotDataIfNeeded 清理词组卡片异常: $e');
+    }
     print('[DB] seedHotDataIfNeeded 已有数据，跳过 Card 写入');
     return;
   }
@@ -1388,10 +982,17 @@ Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
     return;
   }
   final now = DateTime.now().millisecondsSinceEpoch;
-  final randomIds = List.generate(notes.length, (i) => i)..shuffle();
   final batch = hotDb.batch();
+  int insertedCount = 0;
   for (int i = 0; i < notes.length; i++) {
     final note = notes[i];
+    final spelling = (note['Spelling'] as String? ?? '').trim();
+    // 过滤无效单词：空单词、含空格、不含任何字母、首/第二字符非法、以 - 或 ' 开头
+    if (spelling.isEmpty || spelling.contains(' ') ||
+        !spelling.contains(RegExp(r'[a-zA-Z]')) ||
+        !_isAlpha(spelling.codeUnitAt(0)) ||
+        (spelling.length >= 2 && !_isAlpha(spelling.codeUnitAt(1))) ||
+        spelling.startsWith('-') || spelling.startsWith("'")) continue;
     batch.insert(
       kTableCard,
       {
@@ -1404,14 +1005,20 @@ Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
         'Favorite': 0,
         'Topic_Read': 0,
         'Tree_Visit': 0,
-        'Random_Sort_ID': randomIds[i],
+        'Random_Sort_ID': insertedCount,
+        'Tag_List': note['Tag_List'] as String?,
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+    insertedCount++;
   }
+  // 打乱插入顺序以实现随机排序
+  await hotDb.execute(
+    'UPDATE $kTableCard SET Random_Sort_ID = (ABS(RANDOM()) % $insertedCount) WHERE Random_Sort_ID >= 0',
+  );
   print('[DB] seedHotDataIfNeeded 开始批量写入Card...');
   await batch.commit(noResult: true);
-  print('[DB] seedHotDataIfNeeded 完成');
+  print('[DB] seedHotDataIfNeeded 完成，插入 $insertedCount 张 Card（已过滤词组）');
 }
 
 // ============================================================================
@@ -1453,9 +1060,30 @@ class NoteModel {
   final int collinsStar;
   final String? definitionEn;
   final String? exampleSentence;
+
+  // 时态/变形（完整解析 exchange 列）
   final String? pastTense;
   final String? pastParticiple;
+  final String? presentParticiple;
+  final String? thirdPerson;
+  final String? comparative;
+  final String? superlative;
+  final String? plural;
+  final String? lemma;
+  final String? lemmaVariant;
+
   final String? partOfSpeech;
+
+  // 词书标签（JSON 数组字符串）
+  final String? tagList;
+
+  // 近义词辨析（来自 resemble.txt）
+  final String? synonymJson;
+
+  // Oxford 标识
+  final int isOxford;
+  final int oxford3000;
+  final int oxford5000;
 
   NoteModel({
     required this.conceptUuid,
@@ -1472,7 +1100,19 @@ class NoteModel {
     this.exampleSentence,
     this.pastTense,
     this.pastParticiple,
+    this.presentParticiple,
+    this.thirdPerson,
+    this.comparative,
+    this.superlative,
+    this.plural,
+    this.lemma,
+    this.lemmaVariant,
     this.partOfSpeech,
+    this.tagList,
+    this.synonymJson,
+    this.isOxford = 0,
+    this.oxford3000 = 0,
+    this.oxford5000 = 0,
   });
 
   factory NoteModel.fromMap(Map<String, dynamic> map) {
@@ -1491,9 +1131,41 @@ class NoteModel {
       exampleSentence: map['Example_Sentence'] as String?,
       pastTense: map['Past_Tense'] as String?,
       pastParticiple: map['Past_Participle'] as String?,
+      presentParticiple: map['Present_Participle'] as String?,
+      thirdPerson: map['Third_Person'] as String?,
+      comparative: map['Comparative'] as String?,
+      superlative: map['Superlative'] as String?,
+      plural: map['Plural'] as String?,
+      lemma: map['Lemma'] as String?,
+      lemmaVariant: map['Lemma_Variant'] as String?,
       partOfSpeech: map['Part_Of_Speech'] as String?,
+      tagList: map['Tag_List'] as String?,
+      synonymJson: map['Synonym_JSON'] as String?,
+      isOxford: map['Is_Oxford'] as int? ?? 0,
+      oxford3000: map['Oxford_3000'] as int? ?? 0,
+      oxford5000: map['Oxford_5000'] as int? ?? 0,
     );
   }
+}
+
+/// 批量查询 Note（Map<UUID, NoteModel>），每批 2000 条
+Future<Map<String, NoteModel>> queryNotesBatch(Database db, List<String> uuids) async {
+  if (uuids.isEmpty) return {};
+  final result = <String, NoteModel>{};
+  const batchSize = 2000;
+  for (int i = 0; i < uuids.length; i += batchSize) {
+    final batch = uuids.skip(i).take(batchSize).toList();
+    final placeholders = List.filled(batch.length, '?').join(',');
+    final rows = await db.rawQuery(
+      'SELECT * FROM Note WHERE Concept_UUID IN ($placeholders)',
+      batch,
+    );
+    for (final row in rows) {
+      final note = NoteModel.fromMap(row);
+      result[note.conceptUuid] = note;
+    }
+  }
+  return result;
 }
 
 Future<NoteModel?> queryNoteByUuid(Database db, String uuid) async {
@@ -1561,6 +1233,33 @@ Future<List<WordBookModel>> queryAllWordBooks(Database db) async {
   return results.map((e) => WordBookModel.fromMap(e)).toList();
 }
 
+/// 查询 Note 表统计信息（用于词库诊断）
+Future<Map<String, int>> queryNoteStats(Database romDb) async {
+  final total = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Note')) ?? 0;
+  final collinsPos = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE Collins_Star > 0')) ?? 0;
+  final bncPos = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE BNC > 0')) ?? 0;
+  final frqPos = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE FRQ > 0')) ?? 0;
+  final oxfordPos = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE Is_Oxford > 0 OR Oxford_3000 > 0 OR Oxford_5000 > 0')) ?? 0;
+  final resembleCount = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Resemble')) ?? 0;
+  final synonymFilled = Sqflite.firstIntValue(
+      await romDb.rawQuery("SELECT COUNT(*) FROM Note WHERE Synonym_JSON IS NOT NULL AND Synonym_JSON != ''")) ?? 0;
+  return {
+    'total': total,
+    'collinsPos': collinsPos,
+    'bncPos': bncPos,
+    'frqPos': frqPos,
+    'oxfordPos': oxfordPos,
+    'resembleCount': resembleCount,
+    'synonymFilled': synonymFilled,
+  };
+}
+
 /// 根据 Book_ID 查询词书
 Future<WordBookModel?> queryWordBookById(Database db, String bookId) async {
   final results = await db.query(
@@ -1582,20 +1281,32 @@ class TreeRootModel {
   final String rootName;
   final String rootDefinition;
   final String rootGroup;
+  final String origin;
+  final String rootFunction;   // 构词说明（新增，约611条词根有值）
+  final String rootSynonyms;   // 同义词根（新增）
+  final String rootAntonyms;   // 反义词根（新增）
 
   TreeRootModel({
     required this.rootId,
     required this.rootName,
     required this.rootDefinition,
     required this.rootGroup,
+    required this.origin,
+    this.rootFunction  = '',
+    this.rootSynonyms  = '',
+    this.rootAntonyms  = '',
   });
 
   factory TreeRootModel.fromMap(Map<String, dynamic> map) {
     return TreeRootModel(
-      rootId: map['Root_ID'] as String,
-      rootName: map['Root_Name'] as String,
+      rootId:         map['Root_ID'] as String,
+      rootName:       map['Root_Name'] as String,
       rootDefinition: map['Root_Definition'] as String,
-      rootGroup: map['Root_Group'] as String,
+      rootGroup:      map['Root_Group'] as String,
+      origin:        (map['Root_Origin'] as String?) ?? '',
+      rootFunction:  (map['Root_Function'] as String?) ?? '',
+      rootSynonyms:  (map['Root_Synonyms'] as String?) ?? '',
+      rootAntonyms:  (map['Root_Antonyms'] as String?) ?? '',
     );
   }
 }
@@ -1627,39 +1338,29 @@ Future<List<TreeRootModel>> queryAllTreeRoots(Database db) async {
 }
 
 class TreeWordModel {
-  final int treeWordId;
+  final int? treeWordId;
   final String rootId;
   final String conceptUuid;
-  final String compoundForm;
-  final String compoundMeaning;
-  final String finalMeaning;
+  final String compoundForm; // 单词本身，如 absorb
   final int sortOrder;
 
   TreeWordModel({
-    required this.treeWordId,
+    this.treeWordId,
     required this.rootId,
     required this.conceptUuid,
     required this.compoundForm,
-    required this.compoundMeaning,
-    required this.finalMeaning,
-    required this.sortOrder,
+    this.sortOrder = 0,
   });
 
   factory TreeWordModel.fromMap(Map<String, dynamic> map) {
     return TreeWordModel(
-      treeWordId: map['Tree_Word_ID'] as int,
+      treeWordId: map['Tree_Word_ID'] as int?,
       rootId: map['Root_ID'] as String,
       conceptUuid: map['Concept_UUID'] as String,
       compoundForm: map['Compound_Form'] as String,
-      compoundMeaning: map['Compound_Meaning'] as String,
-      finalMeaning: map['Final_Meaning'] as String,
-      sortOrder: map['Sort_Order'] as int,
+      sortOrder: map['Sort_Order'] as int? ?? 0,
     );
   }
-
-  /// 渲染字符串 = {单词}={词根组合形式}={组合含义}={最终中文释义}
-  String get renderString =>
-      '$compoundForm=$compoundMeaning=$finalMeaning';
 }
 
 Future<List<TreeWordModel>> queryTreeWordsByRoot(Database db, String rootId) async {
@@ -1877,6 +1578,53 @@ Future<void> upsertCard(Database db, CardModel card) async {
     card.toMap(),
     conflictAlgorithm: ConflictAlgorithm.replace,
   );
+}
+
+/// 按词书过滤查询新卡
+/// Web（单库）：JOIN 跨表查询；非 Web：直接按 Card.Tag_List 过滤（已迁移回填）
+Future<List<CardModel>> queryNewCardsByBook(Database hotDb, String bookId, {int? limit}) async {
+  // 从 WordBook 表查 Tag_List
+  final book = await queryWordBookById(hotDb, bookId);
+  if (book == null) {
+    print('[DB] queryNewCardsByBook: 未找到词书 $bookId，回退到 queryNewCards');
+    return queryNewCards(hotDb, limit: limit);
+  }
+
+  final tags = book.tagList.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+  if (tags.isEmpty) {
+    print('[DB] queryNewCardsByBook: 词书 $bookId 无 Tag_List，回退到 queryNewCards');
+    return queryNewCards(hotDb, limit: limit);
+  }
+
+  print('[DB] queryNewCardsByBook: 词书=$bookId, tags=$tags');
+  final effectiveLimit = limit ?? 999999;
+
+  List<Map<String, dynamic>> results;
+
+  if (kIsWeb) {
+    // Web: Card.Tag_List 已在 seedHotDataIfNeeded 时从 Note 回填，直接过滤，无需跨库 JOIN
+    final likeConditions = tags.map((t) => "Tag_List LIKE '%\"$t\"%'").join(' OR ');
+    results = await hotDb.rawQuery('''
+      SELECT * FROM Card
+      WHERE Status = ?
+      AND ($likeConditions)
+      ORDER BY Random_Sort_ID ASC
+      LIMIT ?
+    ''', [CardStatus.newCard, effectiveLimit]);
+  } else {
+    // 非 Web：Card.Tag_List 已通过迁移回填，直接过滤
+    final likeConditions = tags.map((t) => "Tag_List LIKE '%\"$t\"%'").join(' OR ');
+    results = await hotDb.rawQuery('''
+      SELECT * FROM Card
+      WHERE Status = ?
+      AND ($likeConditions)
+      ORDER BY Random_Sort_ID ASC
+      LIMIT ?
+    ''', [CardStatus.newCard, effectiveLimit]);
+  }
+
+  print('[DB] queryNewCardsByBook: 查询到 ${results.length} 张新卡');
+  return results.map((e) => CardModel.fromMap(e)).toList();
 }
 
 Future<void> updateCardFavorite(Database db, String uuid, int favorite) async {
@@ -2329,6 +2077,29 @@ Future<void> runMigrations(Database hotDb, Database romDb) async {
   try {
     await romDb.execute('ALTER TABLE $kTableNote ADD COLUMN FRQ INTEGER DEFAULT 0');
   } catch (_) {}
+
+  // 迁移：为 Card 表添加 Tag_List 列（如果不存在）
+  try {
+    await hotDb.execute('ALTER TABLE $kTableCard ADD COLUMN Tag_List TEXT');
+  } catch (_) {}
+
+  // 迁移：回填现有 Card 的 Tag_List（从 Note 表关联）
+  try {
+    final updated = await hotDb.rawUpdate('''
+      UPDATE Card
+      SET Tag_List = (
+        SELECT Note.Tag_List FROM Note
+        WHERE Note.Concept_UUID = Card.Concept_UUID
+        LIMIT 1
+      )
+      WHERE Card.Tag_List IS NULL OR Card.Tag_List = ''
+    ''');
+    if (updated > 0) {
+      print('[DB] Migration: Card.Tag_List 回填完成，更新了 $updated 条');
+    }
+  } catch (e) {
+    print('[DB] Migration Card.Tag_List 回填失败: $e');
+  }
 
   // 日志修剪：保留与报表窗口一致（queryYearlyStats 默认 3 年），避免月度/年度统计被过早清空
   const reviewLogRetentionDays = 1095;

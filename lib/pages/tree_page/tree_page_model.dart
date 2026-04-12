@@ -1,41 +1,37 @@
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
-import 'tree_page_widget.dart' show TreePageWidget;
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:demo1red/backend/provider.dart';
 
 class TreePageModel extends FlutterFlowModel<TreePageWidget> {
   TreePageData? pageData;
   bool isLoading = true;
   bool _disposed = false;
-  /// 记录当前页面的 rootId，供 next 按钮使用
   String currentRootId = 're';
 
   @override
   void initState(BuildContext context) {
     updateOnChange = true;
+    // 仅初始化 currentRootId，不加载数据
+    // 注意：此时 widget 尚未设置到 _widget，故不能在此调用 _loadData
+    final initialRootId = widget?.rootId;
+    if (initialRootId != null && initialRootId.isNotEmpty) {
+      currentRootId = initialRootId;
+    }
   }
 
   @override
   void onInitialized() {
-    // 优先从 URL 查询参数解析 rootId，回退到 widget.rootId 或默认值 're'
-    String rootId = widget?.rootId ?? 're';
-    if (context != null) {
-      final uri = GoRouter.of(context!).routeInformationProvider.value.uri;
-      if (uri.queryParameters.containsKey('rootId')) {
-        rootId = uri.queryParameters['rootId']!;
-      }
+    // _widget 在此时已就绪，可安全读取 rootId 并加载数据
+    final safeRootId = widget?.rootId;
+    if (safeRootId != null && safeRootId.isNotEmpty) {
+      currentRootId = safeRootId;
     }
-    currentRootId = rootId;
-    _loadData(rootId);
+    _loadData(currentRootId);
   }
 
   Future<void> _loadData(String rootId) async {
     if (_disposed) return;
-    final ctx = context;
-    if (ctx == null) return;
-
     try {
       updatePage(() => isLoading = true);
       final data = await BackendManager.instance.loadTreePageData(rootId);
@@ -45,34 +41,42 @@ class TreePageModel extends FlutterFlowModel<TreePageWidget> {
         isLoading = false;
       });
     } catch (e) {
-      if (!_disposed) {
+      if (!_disposed && context != null) {
         updatePage(() => isLoading = false);
-        ctx.pushNamed(ErrorPageWidget.routeName);
+        final ctx = context;
+        if (ctx != null) ctx.pushNamed(ErrorPageWidget.routeName);
       }
     }
   }
 
-  /// Finish：提取当前会话中学过的单词，转为拼写列表，跳转到 ResultPage
   Future<void> finishLearning(BuildContext context) async {
-    final ctx = context;
-    if (ctx == null) return;
     try {
       final session = BackendManager.instance.getStudySession();
       final uuids = session?.learnedCards.map((c) => c.conceptUuid).toList() ?? [];
       final spellings = await BackendManager.instance.getSpellingsByUuids(uuids);
       final encoded = Uri.encodeComponent(jsonEncode(spellings));
-      ctx.push('${ResultPageWidget.routePath}?fromTreeLearning=true&learnedSpellings=$encoded');
+      context.push('${ResultPageWidget.routePath}?fromTreeLearning=true&learnedSpellings=$encoded');
     } catch (e) {
-      if (!_disposed) ctx.pushNamed(ErrorPageWidget.routeName);
+      if (!_disposed) context.pushNamed(ErrorPageWidget.routeName);
     }
   }
 
-  /// Next：重新加载当前树页面（刷新）
   void reloadPage(BuildContext context) {
-    final ctx = context;
-    if (ctx == null) return;
-    ctx.go('/treePage?rootId=$currentRootId');
+    context.go('/treePage?rootId=$currentRootId');
   }
+
+  /// 重新加载指定词根的数据（用于路由参数变化时）
+  Future<void> reloadData(String rootId) async {
+    if (rootId.isEmpty) return;
+    currentRootId = rootId;
+    await _loadData(rootId);
+  }
+
+  String get rootName => pageData?.rootName ?? '';
+  String get rootDefinition => pageData?.rootDefinition ?? '';
+  String get rootOrigin => pageData?.rootOrigin ?? '';
+  String get rootFunction => pageData?.rootFunction ?? '';
+  List get words => pageData?.words ?? [];
 
   @override
   void dispose() {

@@ -12,6 +12,7 @@
         "cached_network_image_platform_interface",
         "cached_network_image_web",
         "collection",
+        "csv",
         "cupertino_icons",
         "file_picker",
         "flutter",
@@ -114,6 +115,14 @@
       "dependencies": []
     },
     {
+      "name": "flutter_tts",
+      "version": "4.2.5",
+      "dependencies": [
+        "flutter",
+        "flutter_web_plugins"
+      ]
+    },
+    {
       "name": "url_launcher_windows",
       "version": "3.1.4",
       "dependencies": [
@@ -191,6 +200,11 @@
       "dependencies": [
         "intl"
       ]
+    },
+    {
+      "name": "csv",
+      "version": "6.0.0",
+      "dependencies": []
     },
     {
       "name": "sqflite_common",
@@ -970,14 +984,6 @@
         "file",
         "path",
         "string_scanner"
-      ]
-    },
-    {
-      "name": "flutter_tts",
-      "version": "4.2.5",
-      "dependencies": [
-        "flutter",
-        "flutter_web_plugins"
       ]
     }
   ],

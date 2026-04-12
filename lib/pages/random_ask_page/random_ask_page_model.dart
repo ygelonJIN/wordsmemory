@@ -35,7 +35,11 @@ class RandomAskPageModel extends FlutterFlowModel<RandomAskPageWidget> {
       if (data == null) {
         final hasSession = BackendManager.instance.hasSession;
         if (!hasSession) {
-          await BackendManager.instance.createLearnSession();
+          final settings = await BackendManager.instance.loadSettings();
+          await BackendManager.instance.createLearnSession(
+            limit: settings.singleSessionLimit,
+            bookId: settings.currentBook,
+          );
           data = await BackendManager.instance.loadRandomAskCard();
         }
       }

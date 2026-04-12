@@ -59,6 +59,7 @@ dependencies:
   sqflite_common_ffi_web: ^1.1.1
   file_picker: 8.1.6
   sqflite_common: ^2.5.6
+  csv: ^6.0.0
   timeago: 3.7.1
   url_launcher: 6.3.1
   url_launcher_android: 6.3.16
@@ -107,6 +108,7 @@ flutter:
     - assets/pdfs/
     - assets/jsons/
     - assets/databases/
+    - assets/ecdict/
 
 
 

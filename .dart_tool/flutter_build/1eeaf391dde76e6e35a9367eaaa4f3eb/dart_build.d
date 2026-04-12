@@ -1,0 +1,1 @@
+ C:\\Users\\joss1\\Desktop\\goldene\\.dart_tool\\flutter_build\\1eeaf391dde76e6e35a9367eaaa4f3eb\\dart_build_result.json:  C:\\Users\\joss1\\Desktop\\goldene\\.dart_tool\\package_config.json C:\\Users\\joss1\\Desktop\\goldene\\pubspec.yaml D:\\flutter\\bin\\cache\\dart-sdk\\version c:\\users\\joss1\\desktop\\goldene\\.dart_tool\\package_config.json

@@ -126,9 +126,7 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                   ),
                   SizedBox(width: 30),
                   Text(
-                    _model.cardData != null && _model.cardData!.collinsStar > 0
-                        ? 'collinsStar:${_model.cardData!.collinsStar}'
-                        : '',
+                    _model.cardData?.collinsStarText ?? '',
                     style: FlutterFlowTheme.of(context).bodyMedium.override(
                           font: GoogleFonts.notoSans(
                             fontWeight: FontWeight.w600,
@@ -371,6 +369,9 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                 ),
               ),
             ),
+            // 词根词缀区域（Ask 页面不显示）
+            if (_model.cardData != null)
+              const SizedBox.shrink(),
             // 单词居中显示
             Align(
               alignment: AlignmentDirectional(0.0, 0.0),

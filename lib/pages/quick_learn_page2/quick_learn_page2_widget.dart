@@ -355,10 +355,10 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                                           Spacer(),
                                           Align(
                                             alignment:
-                                                AlignmentDirectional(-1.0, 0.0),
+                                                AlignmentDirectional(1.0, 0.0),
                                             child: Padding(
                                               padding: EdgeInsetsDirectional.fromSTEB(
-                                                  10.0, 0.0, 10.0, 0.0),
+                                                  0.0, 0.0, 10.0, 0.0),
                                               child: Text(
                                                 item.statusText,
                                                 style: FlutterFlowTheme.of(context)
