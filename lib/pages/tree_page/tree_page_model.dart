@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:demo1red/backend/provider.dart';
 
 class TreePageModel extends FlutterFlowModel<TreePageWidget> {
+  bool _disposed = false;
+
   TreePageData? pageData;
   bool isLoading = true;
-  bool _disposed = false;
   String currentRootId = 're';
 
   @override

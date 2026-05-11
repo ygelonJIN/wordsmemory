@@ -29,6 +29,12 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _model.refresh();
+  }
+
+  @override
   void dispose() {
     _model.dispose();
 
@@ -92,44 +98,57 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
               ),
             ),
             Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0.0, 55.0, 0.0, 60.0),
+              padding: EdgeInsetsDirectional.fromSTEB(0.0, 60.0, 0.0, 0.0),
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 children: [
-                  Align(
-                    alignment: AlignmentDirectional(1.0, 0.0),
-                    child: Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
-                      child: Text(
-                        _model.userName,
-                        style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FontWeight.normal,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .fontStyle,
-                              ),
-                              color: Colors.black,
-                              fontSize: 42.0,
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.normal,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .fontStyle,
-                            ),
-                      ),
+                  Padding(
+                    padding:
+                        EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        InkWell(
+                          splashColor: Colors.transparent,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () async {
+                            context.pushNamed(HomePageWidget.routeName);
+                          },
+                          child: Text(
+                            'home',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.notoSans(
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                                  fontSize: 18.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                  decoration: TextDecoration.underline,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Align(
-                    alignment: AlignmentDirectional(1.0, 0.0),
+                    alignment: AlignmentDirectional(-1.0, 0.0),
                     child: Padding(
                       padding:
-                          EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                          EdgeInsetsDirectional.fromSTEB(12.0, 5.0, 12.0, 0.0),
                       child: Text(
-                        '你的学习报告',
+                        '数据统计',
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.inter(
+                              font: GoogleFonts.notoSans(
                                 fontWeight: FlutterFlowTheme.of(context)
                                     .bodyMedium
                                     .fontWeight,
@@ -188,6 +207,7 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                     child: Column(
                       mainAxisSize: MainAxisSize.max,
                       children: [
+                        // 1. 总学习时长
                         Align(
                           alignment: AlignmentDirectional(-1.0, -1.0),
                           child: Padding(
@@ -217,6 +237,7 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                             ),
                           ),
                         ),
+                        // 2. 累计学习数
                         Align(
                           alignment: AlignmentDirectional(-1.0, -1.0),
                           child: Padding(
@@ -245,6 +266,36 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                             ),
                           ),
                         ),
+                        // 3. 累计复习数
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              _model.totalReviewCountText,
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .displayLarge
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .displayLarge
+                                        .fontStyle,
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        // 4. 总学习天数
                         Align(
                           alignment: AlignmentDirectional(-1.0, -1.0),
                           child: Padding(
@@ -273,6 +324,36 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                             ),
                           ),
                         ),
+                        // 5. 已学词书
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              '已学词书：',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight:
+                                          FlutterFlowTheme.of(context)
+                                              .displayMedium
+                                              .fontWeight,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 24.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FlutterFlowTheme.of(context)
+                                        .displayMedium
+                                        .fontWeight,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 2.0,
+                                  ),
+                            ),
+                          ),
+                        ),
                         Align(
                           alignment: AlignmentDirectional(-1.0, -1.0),
                           child: Padding(
@@ -281,6 +362,119 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                             child: Text(
                               _model.bookProgressText,
                               style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle:
+                                          FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .fontStyle,
+                                    ),
+                                    fontSize: 14.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF555555),
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        // 6. 评级分布
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              '评级分布：',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight:
+                                          FlutterFlowTheme.of(context)
+                                              .displayMedium
+                                              .fontWeight,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 24.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FlutterFlowTheme.of(context)
+                                        .displayMedium
+                                        .fontWeight,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 2.0,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              _model.ratingDistributionText,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle:
+                                          FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .fontStyle,
+                                    ),
+                                    fontSize: 14.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF555555),
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        // 高阶数据 section header
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              '高阶数据：',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayMedium
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight:
+                                          FlutterFlowTheme.of(context)
+                                              .displayMedium
+                                              .fontWeight,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 24.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FlutterFlowTheme.of(context)
+                                        .displayMedium
+                                        .fontWeight,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 2.0,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        // 7. 成熟转化率 + 备注
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              _model.matureRateText,
+                              style: FlutterFlowTheme.of(context)
                                   .displayLarge
                                   .override(
                                     font: GoogleFonts.notoSans(
@@ -303,11 +497,36 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                         ),
                         Align(
                           alignment: AlignmentDirectional(-1.0, -1.0),
-                            child: Padding(
+                          child: Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(
                                 20.0, 0.0, 20.0, 0.0),
                             child: Text(
-                              _model.monthlySummaryText,
+                              '("新词"平均需要经历多少次按键才能转化为"成熟"状态)',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: const Color(0xFF858585),
+                                    fontSize: 12.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        // 8. 成熟词汇失忆率 + 备注
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              _model.forgotRateText,
                               style: FlutterFlowTheme.of(context)
                                   .displayLarge
                                   .override(
@@ -329,122 +548,137 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
                             ),
                           ),
                         ),
-                            ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          scrollDirection: Axis.vertical,
-                          children: [
-                            Align(
-                              alignment: AlignmentDirectional(-1.0, 0.0),
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    20.0, 0.0, 20.0, 0.0),
-                                child: Text(
-                                  '年度总结：',
-                                  style: FlutterFlowTheme.of(context)
-                                      .displayMedium
-                                      .override(
-                                        font: GoogleFonts.notoSans(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .displayMedium
-                                                  .fontWeight,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                        color: Colors.black,
-                                        fontSize: 24.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .displayMedium
-                                            .fontWeight,
-                                        fontStyle: FontStyle.italic,
-                                        lineHeight: 2.0,
-                                      ),
-                                ),
-                              ),
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              '(已经进入长期记忆区（间隔 > 21天）的词被遗忘的概率)',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: const Color(0xFF858585),
+                                    fontSize: 12.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 1.5,
+                                  ),
                             ),
-                            ...(_model.yearlySummaryRows.isEmpty
-                                ? [_buildEmptyRow(context, '暂无年度数据')]
-                                : _model.yearlySummaryRows
-                                    .map((s) => _buildStatRow(context, s))),
-                          ],
+                          ),
                         ),
-                        ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          scrollDirection: Axis.vertical,
-                          children: [
-                            Align(
-                              alignment: AlignmentDirectional(-1.0, 0.0),
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    20.0, 0.0, 20.0, 0.0),
-                                child: Text(
-                                  '查看月度总结：',
-                                  style: FlutterFlowTheme.of(context)
-                                      .displayMedium
-                                      .override(
-                                        font: GoogleFonts.notoSans(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .displayMedium
-                                                  .fontWeight,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                        color: Colors.black,
-                                        fontSize: 24.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .displayMedium
-                                            .fontWeight,
-                                        fontStyle: FontStyle.italic,
-                                        lineHeight: 2.0,
-                                      ),
-                                ),
-                              ),
+                        // 9. 认知吞吐量 + 备注
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              _model.throughputText,
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .displayLarge
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .displayLarge
+                                        .fontStyle,
+                                    lineHeight: 1.5,
+                                  ),
                             ),
-                            ...(_model.monthlySummaryRows.isEmpty
-                                ? [_buildEmptyRow(context, '暂无月度数据')]
-                                : _model.monthlySummaryRows
-                                    .map((s) => _buildStatRow(context, s))),
-                          ],
+                          ),
+                        ),
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              '(每分钟处理的词条数)',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: const Color(0xFF858585),
+                                    fontSize: 12.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        // 10. 历史积压复习量 + 备注
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 4.0, 20.0, 0.0),
+                            child: Text(
+                              _model.backlogText,
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.notoSans(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .displayLarge
+                                          .fontStyle,
+                                    ),
+                                    color: Colors.black,
+                                    fontSize: 18.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .displayLarge
+                                        .fontStyle,
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: AlignmentDirectional(-1.0, -1.0),
+                          child: Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                20.0, 0.0, 20.0, 0.0),
+                            child: Text(
+                              '(超过理想复习时间但仍未复习的词汇绝对数量)',
+                              style: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    color: const Color(0xFF858585),
+                                    fontSize: 12.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.normal,
+                                    fontStyle: FontStyle.italic,
+                                    lineHeight: 1.5,
+                                  ),
+                            ),
+                          ),
                         ),
                       ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(20.0, 60.0, 20.0, 0.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () async {
-                      context.pushNamed(HomePageWidget.routeName);
-                    },
-                    child: Text(
-                      'home',
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .fontStyle,
-                            ),
-                            fontSize: 18.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
-                            fontStyle: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .fontStyle,
-                            decoration: TextDecoration.underline,
-                          ),
                     ),
                   ),
                 ],
@@ -487,7 +721,7 @@ class _ReportsPageWidgetState extends State<ReportsPageWidget> {
             fontWeight: FontWeight.normal,
             fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
           ),
-          color: Colors.grey,
+          color: const Color(0xFF858585),
           fontSize: 16.0,
           letterSpacing: 0.0,
           fontWeight: FontWeight.normal,

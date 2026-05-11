@@ -1,6 +1,5 @@
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
-import 'topic_reading_page1_widget.dart' show TopicReadingPage1Widget;
 import 'package:flutter/material.dart';
 import 'package:demo1red/backend/provider.dart';
 
@@ -8,13 +7,14 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
   TopicReadingPageData? pageData;
   bool isLoading = true;
   bool _disposed = false;
-  bool _pageReady = false;
-  bool _loading = false; // 防止 onInitialized 和 didUpdateWidget 的两次 _loadData 并发
+  String? _pendingArticleId;
   String? nextArticleId;
   String? previousArticleId;
   bool hasPrevious = false;
   bool hasNext = false;
   String? topicId;
+  int currentIndex = 0;
+  int totalCount = 0;
 
   @override
   void initState(BuildContext context) {
@@ -25,29 +25,49 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
   void onInitialized() {
     final articleId = widget?.articleId ?? 'art_tech_read_01';
     topicId = widget?.topicId ?? 'topic_tech_read';
-    print('[TopicReading1] onInitialized articleId=$articleId');
+    _pendingArticleId = articleId;
+    print('[TopicReading1] ★ onInitialized articleId=$articleId topicId=$topicId');
     _loadData(articleId);
   }
 
   Future<void> refreshData(String articleId) async {
-    if (_disposed) return;
-    print('[TopicReading1] refreshData articleId=$articleId');
+    _disposed = false;  // 重置，允许重新进入
+    _pendingArticleId = articleId;
+    print('[TopicReading1] ★ refreshData articleId=$articleId _pendingArticleId=$_pendingArticleId _disposed=$_disposed');
     await _loadData(articleId);
   }
 
+  void updateTopicId(String? newTopicId) {
+    if (newTopicId == null) return;
+    topicId = newTopicId;
+  }
+
   Future<void> _loadData(String articleId) async {
-    if (_disposed) return;
-    if (_loading) return;
-    _loading = true;
+    if (_disposed) {
+      print('[TopicReading1] ★ _loadData BLOCKED _disposed=true articleId=$articleId');
+      return;
+    }
     final ctx = context;
-    if (ctx == null) { _loading = false; return; }
-    print('[TopicReading1] _loadData 开始 articleId=$articleId _pageReady=$_pageReady');
+    if (ctx == null) {
+      print('[TopicReading1] ★ _loadData BLOCKED context=null articleId=$articleId');
+      return;
+    }
+
+    print('[TopicReading1] ★ _loadData entry articleId=$articleId _pendingArticleId=$_pendingArticleId _disposed=$_disposed');
+
+    // 忽略过期请求
+    if (_pendingArticleId != articleId) {
+      print('[TopicReading1] ★ _loadData 忽略过期结果 articleId=$articleId (期望=$_pendingArticleId)');
+      return;
+    }
+
+    print('[TopicReading1] _loadData 开始 articleId=$articleId');
 
     try {
       final data = await BackendManager.instance.loadArticle(articleId);
       print('[TopicReading1] loadArticle 返回: ${data == null ? "null" : "非null, articleId=${data.articleId}"}');
 
-      final tid = widget?.topicId ?? 'topic_tech_read';
+      final tid = data?.topicId ?? widget?.topicId ?? 'topic_tech_read';
 
       // 计算是否有上一篇和下一篇
       String? computedNext;
@@ -57,10 +77,12 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
 
       if (tid.isNotEmpty) {
         final articlesInfo = await BackendManager.instance.getTopicArticlesWithIndex(tid, articleId);
+        print('[TopicReading1] ★ getTopicArticlesWithIndex tid=$tid articleId=$articleId --> articlesInfo=${articlesInfo == null ? "null" : "non-null: count=${articlesInfo.articles.length} index=${articlesInfo.currentIndex} hasNext=${articlesInfo.hasNext} hasPrev=${articlesInfo.hasPrevious}"}');
         if (articlesInfo != null && articlesInfo.articles.isNotEmpty) {
           computedHasPrevious = articlesInfo.hasPrevious;
           computedHasNext = articlesInfo.hasNext;
-          // 添加额外的边界检查，防止并发修改导致越界
+          currentIndex = articlesInfo.currentIndex;
+          totalCount = articlesInfo.articles.length;
           if (articlesInfo.hasNext && articlesInfo.currentIndex + 1 < articlesInfo.articles.length) {
             computedNext = articlesInfo.articles[articlesInfo.currentIndex + 1].articleId;
           }
@@ -68,10 +90,19 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
             computedPrev = articlesInfo.articles[articlesInfo.currentIndex - 1].articleId;
           }
         }
-        print('[TopicReading1] 文章导航: hasPrevious=$computedHasPrevious hasNext=$computedHasNext next=$computedNext prev=$computedPrev');
+        print('[TopicReading1] ★ 导航计算: computedNext=$computedNext computedPrev=$computedPrev computedHasNext=$computedHasNext computedHasPrev=$computedHasPrevious');
       }
 
-      if (_disposed) { _loading = false; return; }
+      // 双重检查：过期则丢弃
+      if (_pendingArticleId != articleId) {
+        print('[TopicReading1] ★ 结果已过期，跳过更新 articleId=$articleId');
+        return;
+      }
+
+      if (_disposed) {
+        print('[TopicReading1] ★ _loadData BLOCKED after await _disposed=true');
+        return;
+      }
       updatePage(() {
         pageData = data;
         nextArticleId = computedNext;
@@ -80,7 +111,7 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
         hasNext = computedHasNext;
         isLoading = false;
       });
-      print('[TopicReading1] _loadData 完成: readCountText=${data?.readCountText} wordCountText=${data?.wordCountText}');
+      print('[TopicReading1] ★ _loadData 完成: nextArticleId=$nextArticleId previousArticleId=$previousArticleId hasNext=$hasNext hasPrevious=$hasPrevious');
     } catch (e, st) {
       print('[TopicReading1] _loadData 异常: $e\n$st');
       if (!_disposed) {
@@ -88,7 +119,6 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
         ctx.pushNamed(ErrorPageWidget.routeName);
       }
     }
-    _loading = false;
   }
 
   Future<void> onWordTap(String? uuid) async {
@@ -99,7 +129,7 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
       print('[TopicReading1] onWordTap uuid=$uuid');
       await BackendManager.instance.visitTopicWord(uuid);
       print('[TopicReading1] visitTopicWord 完成');
-      final articleId = widget?.articleId ?? 'art_tech_read_01';
+      final articleId = pageData?.articleId ?? widget?.articleId ?? 'art_tech_read_01';
       final tid = widget?.topicId ?? 'topic_tech_read';
       await BackendManager.instance.startTopicReadingWordSession(uuid, articleId, tid);
       print('[TopicReading1] startTopicReadingWordSession 完成');
@@ -113,6 +143,7 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
 
   void onNextArticle() {
     final ctx = context;
+    print('[TopicReading1] ★ onNextArticle called: nextArticleId=$nextArticleId context=${ctx != null}');
     if (ctx == null || nextArticleId == null) return;
     final tid = widget?.topicId ?? 'topic_tech_read';
     ctx.go('/topicReadingPage1?articleId=$nextArticleId&topicId=$tid');
@@ -120,9 +151,29 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
 
   void onBackArticle() {
     final ctx = context;
+    print('[TopicReading1] ★ onBackArticle called: previousArticleId=$previousArticleId context=${ctx != null}');
     if (ctx == null || previousArticleId == null) return;
     final tid = widget?.topicId ?? 'topic_tech_read';
     ctx.go('/topicReadingPage1?articleId=$previousArticleId&topicId=$tid');
+  }
+
+  Future<void> jumpToArticle(int index) async {
+    final ctx = context;
+    if (ctx == null || totalCount == 0) return;
+    if (index < 1 || index > totalCount) {
+      print('[TopicReading1] ★ jumpToArticle invalid index=$index (total=$totalCount)');
+      return;
+    }
+    final tid = widget?.topicId ?? 'topic_tech_read';
+    try {
+      final targetId = await BackendManager.instance.getArticleIdByIndex(tid, index - 1);
+      if (targetId != null) {
+        print('[TopicReading1] ★ jumpToArticle index=$index --> articleId=$targetId');
+        ctx.go('/topicReadingPage1?articleId=$targetId&topicId=$tid');
+      }
+    } catch (e) {
+      print('[TopicReading1] ★ jumpToArticle error: $e');
+    }
   }
 
   Future<void> onFinish() async {
@@ -144,7 +195,7 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
 
   @override
   void dispose() {
-    _pageReady = false;
+    print('[TopicReading1] ★ dispose called');
     _disposed = true;
   }
 }

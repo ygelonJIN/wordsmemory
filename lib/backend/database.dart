@@ -191,6 +191,7 @@ CREATE TABLE Card (
     S REAL NOT NULL,
     Fail_Count INTEGER DEFAULT 0,
     Favorite INTEGER DEFAULT 0,
+    Favorite_Learned INTEGER DEFAULT 0,
     Topic_Read INTEGER DEFAULT 0,
     Tree_Visit INTEGER DEFAULT 0,
     Random_Sort_ID INTEGER NOT NULL,
@@ -199,6 +200,7 @@ CREATE TABLE Card (
 CREATE INDEX idx_card_schedule ON Card(Next_Review_Date, (Status & 0x0F));
 CREATE INDEX idx_card_uuid ON Card(Concept_UUID);
 CREATE INDEX idx_card_favorite ON Card(Favorite);
+CREATE INDEX idx_card_fav_learned ON Card(Favorite_Learned);
 CREATE INDEX idx_card_random ON Card(Random_Sort_ID);
 ''';
 
@@ -264,8 +266,6 @@ Future<Database> openRomDatabase(String dbDir) async {
     version: 1,
     onCreate: (db, version) async {
       print('[DB] ROM onCreate 开始');
-      await db.execute('PRAGMA journal_mode=WAL');
-      await db.execute('PRAGMA wal_autocheckpoint=1000');
       await db.execute(kCreateNoteSql);
       await db.execute(kCreateResembleSql);
       await db.execute(kCreateTreeRootSql);
@@ -277,6 +277,8 @@ Future<Database> openRomDatabase(String dbDir) async {
     },
     onOpen: (db) async {
       print('[DB] ROM onOpen 开始');
+      await db.rawQuery('PRAGMA journal_mode=WAL');
+      await db.rawQuery('PRAGMA wal_autocheckpoint=1000');
       await _ensureRomDataIntegrity(db);
       await _ensureSemanticReadingDataSeeded(db);
       print('[DB] ROM onOpen 完成');
@@ -306,238 +308,74 @@ Future<void> _ensureRomDataIntegrity(Database db) async {
 Future<void> ensureRomDataIntegrity(Database db) => _ensureRomDataIntegrity(db);
 
 // ============================================================================
-// 语义阅读专题：科技阅读（词级高亮演示）
-// --------------------------------------------------------------------------
+// 语义阅读专题数据现已迁移到 JSON 文件（见 _ensureSemanticReadingDataSeeded）
+// 此函数保留为空，确保 onCreate 不写入旧数据
 Future<void> _seedSemanticReadingData(Database db) async {
-  // Note：evolution / efficiency / digital / frequently
-  final evolutionNote = {
-    'Concept_UUID': 'note_evolution',
-    'Spelling': 'evolution',
-    'Phonetic': '/ˌiːvəˈluːʃn/',
-    'Definition': 'n. 进化；演变；发展',
-    'Etymology_JSON': '{"roots":[{"root":"e-","meaning":"外、出"},{"root":"vol","meaning":"卷、转"},{"root":"-ution","meaning":"过程"}],"compound":"e(出)+vol(转)+ution(过程)→转出来→进化","final":"进化"}',
-    'Micro_Context_JSON': '{"zh":"The evolution of communication technology illustrates humanity\'s pursuit of efficiency.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
-    'Content_JSON': '{"spelling":"evolution","phonetic":"/ˌiːvəˈluːʃn/","definition":"n. 进化；演变；发展","etymology":"e-(出)+vol(转)+-ution(过程)→转出来→进化","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
-  };
-  final efficiencyNote = {
-    'Concept_UUID': 'note_efficiency',
-    'Spelling': 'efficiency',
-    'Phonetic': '/ɪˈfɪʃnsi/',
-    'Definition': 'n. 效率；效能',
-    'Etymology_JSON': '{"roots":[{"root":"ef-","meaning":"出"},{"root":"fic","meaning":"做"},{"root":"-iency","meaning":"性质/状态"}],"compound":"ef(出)+fic(做)+-iency(性质)→做出来的效果→效率","final":"效率"}',
-    'Micro_Context_JSON': '{"zh":"The telegraph was a crude device to transmit signals across vast distances.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
-    'Content_JSON': '{"spelling":"efficiency","phonetic":"/ɪˈfɪʃnsi/","definition":"n. 效率；效能","etymology":"ef-(出)+fic(做)+-iency(性质)→做出来的效果→效率","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
-  };
-  final digitalNote = {
-    'Concept_UUID': 'note_digital',
-    'Spelling': 'digital',
-    'Phonetic': '/ˈdɪdʒɪtl/',
-    'Definition': 'adj. 数字的；数码的',
-    'Etymology_JSON': '{"roots":[{"root":"digit","meaning":"手指/数字"},{"root":"-al","meaning":"...的"}],"compound":"digit(数字)+-al(...的)→数字的","final":"数字的"}',
-    'Micro_Context_JSON': '{"zh":"In the digital age, we rely heavily on technology.","en":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding."}',
-    'Content_JSON': '{"spelling":"digital","phonetic":"/ˈdɪdʒɪtl/","definition":"adj. 数字的；数码的","etymology":"digit(数字)+-al(...的)→数字的","example":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding.","translation":"在数字时代，数字设备的普及使现代生活日益 demanding。"}',
-  };
-  final frequentlyNote = {
-    'Concept_UUID': 'note_frequently',
-    'Spelling': 'frequently',
-    'Phonetic': '/ˈfriːkwəntli/',
-    'Definition': 'adv. 频繁地；经常地',
-    'Etymology_JSON': '{"roots":[{"root":"frequent","meaning":"频繁的"},{"root":"-ly","meaning":"副词后缀"}],"compound":"frequent(频繁的)+-ly(副词)→频繁地","final":"频繁地"}',
-    'Micro_Context_JSON': '{"zh":"We frequently browse massive amounts of data on our portable gadgets.","en":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed."}',
-    'Content_JSON': '{"spelling":"frequently","phonetic":"/ˈfriːkwəntli/","definition":"adv. 频繁地；经常地","etymology":"frequent(频繁的)+-ly(副词)→频繁地","example":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed.","translation":"我们频繁地在便携设备上浏览大量数据，希望保持信息灵通。"}',
-  };
-
-  await db.insert(kTableNote, evolutionNote);
-  await db.insert(kTableNote, efficiencyNote);
-  await db.insert(kTableNote, digitalNote);
-  await db.insert(kTableNote, frequentlyNote);
-
-  // Topic: 科技阅读
-  await db.insert(kTableTopic, {
-    'Topic_ID': 'topic_tech_read',
-    'Topic_Name': '科技阅读',
-    'Topic_Name_EN': 'Tech Reading',
-    'Word_Count': 2,
-  });
-
-  // Article: 第一篇
-  final techArticleContent = {
-    'title': 'The Evolution of Communication Technology',
-    'segments': [
-      {'t': 'The ', 'c': 0, 'u': ''},
-      {'t': 'evolution', 'c': 1, 'u': 'note_evolution'},
-      {'t': ' of communication technology vividly illustrates humanity\'s relentless pursuit of ', 'c': 0, 'u': ''},
-      {'t': 'efficiency', 'c': 1, 'u': 'note_efficiency'},
-      {'t': '. Initially, early inventors relied on a rather crude device, the telegraph, to transmit simple text signals across vast distances. Over time, as scientists continued to refine these primitive systems, the ability to broadcast voice and video globally became a ubiquitous reality. In the contemporary digital era, the focus has fundamentally shifted. Modern industries now fabricate intricate microchips that process massive amounts of information, which is subsequently stored in an expansive, interconnected database. This remarkable transition from basic wires to sophisticated data networks has profoundly reshaped human society.', 'c': 0, 'u': ''},
-    ],
-  };
-
-  await db.insert(kTableArticle, {
-    'Article_ID': 'art_tech_read_01',
-    'Topic_ID': 'topic_tech_read',
-    'Word_Count': 2,
-    'Content_JSON': jsonEncode(techArticleContent),
-  });
-
-  // Article: 第二篇（占位）
-  final techArticle2Content = {
-    'title': 'Artificial Intelligence: Past, Present, and Future',
-    'segments': [
-      {'t': 'Artificial ', 'c': 0, 'u': ''},
-      {'t': 'intelligence', 'c': 1, 'u': 'note_intelligence'},
-      {'t': ' has transformed every facet of modern life. From the earliest ', 'c': 0, 'u': ''},
-      {'t': 'algorithms', 'c': 1, 'u': 'note_algorithm'},
-      {'t': ' that played chess to the contemporary large language models capable of natural conversation, the trajectory of AI reflects humanity\'s endless ambition to ', 'c': 0, 'u': ''},
-      {'t': 'simulate', 'c': 1, 'u': 'note_simulate'},
-      {'t': ' cognition. Yet this rapid advancement raises profound ethical questions about ', 'c': 0, 'u': ''},
-      {'t': 'privacy', 'c': 1, 'u': 'note_privacy'},
-      {'t': ' and societal impact. Striking a balance between innovation and responsibility remains the defining challenge of our era.', 'c': 0, 'u': ''},
-    ],
-  };
-
-  await db.insert(kTableArticle, {
-    'Article_ID': 'art_tech_read_02',
-    'Topic_ID': 'topic_tech_read',
-    'Word_Count': 4,
-    'Content_JSON': jsonEncode(techArticle2Content),
-  });
-
-  // Article: 第三篇（新）
-  final techArticle3Content = {
-    'title': 'The Information Age',
-    'segments': [
-      {'t': 'In the ', 'c': 0, 'u': ''},
-      {'t': 'digital', 'c': 1, 'u': 'note_digital'},
-      {'t': ' age, the proliferation of ', 'c': 0, 'u': ''},
-      {'t': 'frequently', 'c': 1, 'u': 'note_frequently'},
-      {'t': ' browse massive amounts of data on our portable gadgets, hoping to stay informed. However, true productivity necessitates a focused effort to streamline our workflow, cutting through irrelevant noise. To manage information overload, individuals often look for a cognitive hack to save time, attempting to compress extensive knowledge into brief summaries. While this approach seems efficient, it risks diluting the depth of critical understanding. Mastery requires dedicated engagement rather than mere speed. Therefore, we should create opportunities to ventilate varying perspectives through careful analysis and rigorous discussion. Genuine wisdom is rarely achieved through superficial shortcuts; it demands profound contemplation.', 'c': 0, 'u': ''},
-    ],
-  };
-
-  await db.insert(kTableArticle, {
-    'Article_ID': 'art_tech_read_03',
-    'Topic_ID': 'topic_tech_read',
-    'Word_Count': 2,
-    'Content_JSON': jsonEncode(techArticle3Content),
-  });
+  // 已迁移到 _ensureSemanticReadingDataSeeded，从 JSON 文件加载
 }
 
 Future<void> _ensureSemanticReadingDataSeeded(Database db) async {
-  // 检查 Topic 是否存在
-  final topicExists = Sqflite.firstIntValue(
-      await db.rawQuery("SELECT 1 FROM ${kTableTopic} WHERE Topic_ID = 'topic_tech_read'"));
-
+  // 从 assets/reading/*.json 加载语义阅读数据
+  // 使用 rootBundle 统一读取（与 ecdict 同理，reading 文件夹也是只读静态资源）
   await db.transaction((txn) async {
-    // Notes（ignore：不重复）
-    final noteEvolution = {
-      'Concept_UUID': 'note_evolution',
-      'Spelling': 'evolution',
-      'Phonetic': '/ˌiːvəˈluːʃn/',
-      'Definition': 'n. 进化；演变；发展',
-      'Etymology_JSON': '{"roots":[{"root":"e-","meaning":"外、出"},{"root":"vol","meaning":"卷、转"},{"root":"-ution","meaning":"过程"}],"compound":"e(出)+vol(转)+-ution(过程)→转出来→进化","final":"进化"}',
-      'Micro_Context_JSON': '{"zh":"The evolution of communication technology illustrates humanity\'s pursuit of efficiency.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
-      'Content_JSON': '{"spelling":"evolution","phonetic":"/ˌiːvəˈluːʃn/","definition":"n. 进化；演变；发展","etymology":"e-(出)+vol(转)+-ution(过程)→转出来→进化","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
-    };
-    final noteEfficiency = {
-      'Concept_UUID': 'note_efficiency',
-      'Spelling': 'efficiency',
-      'Phonetic': '/ɪˈfɪʃnsi/',
-      'Definition': 'n. 效率；效能',
-      'Etymology_JSON': '{"roots":[{"root":"ef-","meaning":"出"},{"root":"fic","meaning":"做"},{"root":"-iency","meaning":"性质/状态"}],"compound":"ef(出)+fic(做)+-iency(性质)→做出来的效果→效率","final":"效率"}',
-      'Micro_Context_JSON': '{"zh":"The telegraph was a crude device to transmit signals across vast distances.","en":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency."}',
-      'Content_JSON': '{"spelling":"efficiency","phonetic":"/ɪˈfɪʃnsi/","definition":"n. 效率；效能","etymology":"ef-(出)+fic(做)+-iency(性质)→做出来的效果→效率","example":"The evolution of communication technology vividly illustrates humanity\'s relentless pursuit of efficiency.","translation":"通信技术的演变生动地说明了人类对效率的不懈追求。"}',
-    };
-    final noteDigital = {
-      'Concept_UUID': 'note_digital',
-      'Spelling': 'digital',
-      'Phonetic': '/ˈdɪdʒɪtl/',
-      'Definition': 'adj. 数字的；数码的',
-      'Etymology_JSON': '{"roots":[{"root":"digit","meaning":"手指/数字"},{"root":"-al","meaning":"...的"}],"compound":"digit(数字)+-al(...的)→数字的","final":"数字的"}',
-      'Micro_Context_JSON': '{"zh":"In the digital age, we rely heavily on technology.","en":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding."}',
-      'Content_JSON': '{"spelling":"digital","phonetic":"/ˈdɪdʒɪtl/","definition":"adj. 数字的；数码的","etymology":"digit(数字)+-al(...的)→数字的","example":"In the digital age, the proliferation of digital devices makes modern life increasingly demanding.","translation":"在数字时代，数字设备的普及使现代生活日益 demanding。"}',
-    };
-    final noteFrequently = {
-      'Concept_UUID': 'note_frequently',
-      'Spelling': 'frequently',
-      'Phonetic': '/ˈfriːkwəntli/',
-      'Definition': 'adv. 频繁地；经常地',
-      'Etymology_JSON': '{"roots":[{"root":"frequent","meaning":"频繁的"},{"root":"-ly","meaning":"副词后缀"}],"compound":"frequent(频繁的)+-ly(副词)→频繁地","final":"频繁地"}',
-      'Micro_Context_JSON': '{"zh":"We frequently browse massive amounts of data on our portable gadgets.","en":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed."}',
-      'Content_JSON': '{"spelling":"frequently","phonetic":"/ˈfriːkwəntli/","definition":"adv. 频繁地；经常地","etymology":"frequent(频繁的)+-ly(副词)→频繁地","example":"We frequently browse massive amounts of data on our portable gadgets, hoping to stay informed.","translation":"我们频繁地在便携设备上浏览大量数据，希望保持信息灵通。"}',
-    };
-    await txn.insert(kTableNote, noteEvolution, conflictAlgorithm: ConflictAlgorithm.ignore);
-    await txn.insert(kTableNote, noteEfficiency, conflictAlgorithm: ConflictAlgorithm.ignore);
-    await txn.insert(kTableNote, noteDigital, conflictAlgorithm: ConflictAlgorithm.ignore);
-    await txn.insert(kTableNote, noteFrequently, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await txn.delete(kTableArticle);
+    await txn.delete(kTableTopic);
 
-    // Topic（仅在不存在时创建）
-    if (topicExists == null) {
+    final topicConfigs = <String, Map<String, dynamic>>{
+      'topic_mind_emotion':    {'name': '心理情感',        'name_en': 'Mind & Emotion'},
+      'topic_action':          {'name': '动作行为',        'name_en': 'Action & Behavior'},
+      'topic_daily_life':      {'name': '日常生活',        'name_en': 'Daily Life'},
+      'topic_nature':          {'name': '自然世界',        'name_en': 'Nature & Environment'},
+      'topic_society':         {'name': '社会文化',        'name_en': 'Society & Culture'},
+      'topic_arts_humanities': {'name': '艺术人文',        'name_en': 'Arts & Humanities'},
+      'topic_business':        {'name': '商业经济',        'name_en': 'Business & Economics'},
+      'topic_science_tech':    {'name': '科技工程',        'name_en': 'Science & Technology'},
+      'topic_mixed_pure':      {'name': '综合探索',        'name_en': 'Exploration & Discovery'},
+      'topic_abstract_focused':{'name': '抽象思维',        'name_en': 'Abstract Thinking'},
+    };
+
+    int totalArticles = 0;
+    int loadedTopics = 0;
+
+    for (final entry in topicConfigs.entries) {
+      final topicId = entry.key;
+      final config = entry.value;
+      final filename = 'articles_${topicId.replaceFirst('topic_', '')}.json';
+      final assetPath = 'assets/reading/$filename';
+
+      String jsonStr;
+      try {
+        jsonStr = await rootBundle.loadString(assetPath);
+      } catch (e) {
+        print('[DB] _ensureSemanticReadingDataSeeded: $assetPath 加载失败 ($e)，跳过');
+        continue;
+      }
+
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final articles = data['articles'] as List<dynamic>? ?? [];
+
       await txn.insert(kTableTopic, {
-        'Topic_ID': 'topic_tech_read',
-        'Topic_Name': '科技阅读',
-        'Topic_Name_EN': 'Tech Reading',
-        'Word_Count': 2,
-      });
+        'Topic_ID': topicId,
+        'Topic_Name': config['name'],
+        'Topic_Name_EN': config['name_en'],
+        'Word_Count': 0,
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      loadedTopics++;
+
+      for (final art in articles) {
+        final artMap = art as Map<String, dynamic>;
+        await txn.insert(kTableArticle, {
+          'Article_ID': artMap['article_id'] ?? 'art_${topicId}_$totalArticles',
+          'Topic_ID': topicId,
+          'Content_JSON': jsonEncode(artMap['content_json'] ?? artMap),
+          'Word_Count': artMap['word_count'] ?? 0,
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        totalArticles++;
+      }
+      print('[DB] _ensureSemanticReadingDataSeeded: $topicId 加载成功，${articles.length} 篇文章');
     }
-
-    // Articles（ignore：已存在不覆盖）
-    final techArticleContent = {
-      'title': 'The Evolution of Communication Technology',
-      'segments': [
-        {'t': 'The ', 'c': 0, 'u': ''},
-        {'t': 'evolution', 'c': 1, 'u': 'note_evolution'},
-        {'t': ' of communication technology vividly illustrates humanity\'s relentless pursuit of ', 'c': 0, 'u': ''},
-        {'t': 'efficiency', 'c': 1, 'u': 'note_efficiency'},
-        {'t': '. Initially, early inventors relied on a rather crude device, the telegraph, to transmit simple text signals across vast distances. Over time, as scientists continued to refine these primitive systems, the ability to broadcast voice and video globally became a ubiquitous reality. In the contemporary digital era, the focus has fundamentally shifted. Modern industries now fabricate intricate microchips that process massive amounts of information, which is subsequently stored in an expansive, interconnected database. This remarkable transition from basic wires to sophisticated data networks has profoundly reshaped human society.', 'c': 0, 'u': ''},
-      ],
-    };
-    await txn.insert(kTableArticle, {
-      'Article_ID': 'art_tech_read_01',
-      'Topic_ID': 'topic_tech_read',
-      'Word_Count': 2,
-      'Content_JSON': jsonEncode(techArticleContent),
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
-
-    final techArticle2Content = {
-      'title': 'Artificial Intelligence: Past, Present, and Future',
-      'segments': [
-        {'t': 'Artificial ', 'c': 0, 'u': ''},
-        {'t': 'intelligence', 'c': 1, 'u': 'note_intelligence'},
-        {'t': ' has transformed every facet of modern life. From the earliest ', 'c': 0, 'u': ''},
-        {'t': 'algorithms', 'c': 1, 'u': 'note_algorithm'},
-        {'t': ' that played chess to the contemporary large language models capable of natural conversation, the trajectory of AI reflects humanity\'s endless ambition to ', 'c': 0, 'u': ''},
-        {'t': 'simulate', 'c': 1, 'u': 'note_simulate'},
-        {'t': ' cognition. Yet this rapid advancement raises profound ethical questions about ', 'c': 0, 'u': ''},
-        {'t': 'privacy', 'c': 1, 'u': 'note_privacy'},
-        {'t': ' and societal impact. Striking a balance between innovation and responsibility remains the defining challenge of our era.', 'c': 0, 'u': ''},
-      ],
-    };
-    await txn.insert(kTableArticle, {
-      'Article_ID': 'art_tech_read_02',
-      'Topic_ID': 'topic_tech_read',
-      'Word_Count': 4,
-      'Content_JSON': jsonEncode(techArticle2Content),
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
-
-    // Article: 第三篇（新）
-    final techArticle3Content = {
-      'title': 'The Information Age',
-      'segments': [
-        {'t': 'In the ', 'c': 0, 'u': ''},
-        {'t': 'digital', 'c': 1, 'u': 'note_digital'},
-        {'t': ' age, the proliferation of ', 'c': 0, 'u': ''},
-        {'t': 'frequently', 'c': 1, 'u': 'note_frequently'},
-        {'t': ' browse massive amounts of data on our portable gadgets, hoping to stay informed. However, true productivity necessitates a focused effort to streamline our workflow, cutting through irrelevant noise. To manage information overload, individuals often look for a cognitive hack to save time, attempting to compress extensive knowledge into brief summaries. While this approach seems efficient, it risks diluting the depth of critical understanding. Mastery requires dedicated engagement rather than mere speed. Therefore, we should create opportunities to ventilate varying perspectives through careful analysis and rigorous discussion. Genuine wisdom is rarely achieved through superficial shortcuts; it demands profound contemplation.', 'c': 0, 'u': ''},
-      ],
-    };
-    await txn.insert(kTableArticle, {
-      'Article_ID': 'art_tech_read_03',
-      'Topic_ID': 'topic_tech_read',
-      'Word_Count': 2,
-      'Content_JSON': jsonEncode(techArticle3Content),
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    print('[DB] _ensureSemanticReadingDataSeeded: 完成，共 $loadedTopics 个话题，$totalArticles 篇文章');
   });
-  print('[DB] _ensureSemanticReadingDataSeeded: 完成');
 }
 
 // ============================================================================
@@ -552,22 +390,22 @@ Future<Database> openHotDatabase(String dbDir) async {
     version: 1,
     onCreate: (db, version) async {
       print('[DB] Hot onCreate 开始');
-      await db.execute('PRAGMA journal_mode=WAL');
-      await db.execute('PRAGMA wal_autocheckpoint=1000');
       await db.execute(kCreateCardSql);
       await db.execute(kCreateReviewLogSql);
       await db.execute(kCreateQuickScreenSql);
       await db.execute(kCreateUserSettingsSql);
       await db.execute(kCreateWordBookSql);
+      await db.execute(kCreateBookProgressSql);
       await _initDefaultSettings(db);
-      await _seedWordBooks(db);
       print('[DB] Hot onCreate 完成');
     },
     onUpgrade: (db, oldVersion, newVersion) async {
-      await db.execute('PRAGMA journal_mode=WAL');
+      await db.rawQuery('PRAGMA journal_mode=WAL');
     },
     onOpen: (db) async {
       print('[DB] Hot onOpen 开始');
+      await db.rawQuery('PRAGMA journal_mode=WAL');
+      await db.rawQuery('PRAGMA wal_autocheckpoint=1000');
       final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM Card'));
       print('[DB] Hot onOpen Card数量=$count');
       if (count == null || count == 0) return; // 交由外层补种
@@ -604,45 +442,53 @@ Future<void> _initDefaultSettings(Database db) async {
 
 /// 初始化默认词书数据
 /// 对应 SRS&SDD v2.1 附录 B：词书系统
-Future<void> _seedWordBooks(Database db) async {
+Future<void> _seedWordBooks(Database db, Map<String, int> bookCounts) async {
   await db.delete('WordBook');
+
+  int getCount(String bookId) {
+    if (bookCounts.containsKey(bookId)) return bookCounts[bookId]!;
+    for (final key in bookCounts.keys) {
+      if (key.contains(bookId)) return bookCounts[key]!;
+    }
+    return 0;
+  }
 
   final books = [
     {
       'Book_ID': 'cet4',
       'Book_Name': 'CET-4',
       'Book_Name_EN': 'College English Test Band 4',
-      'Word_Count': 0,
+      'Word_Count': getCount('cet4'),
       'Tag_List': 'zk cet4',
       'Description': '大学英语四级词汇',
-      'Sort_Order': 1,
+      'Sort_Order': 2,
       'Is_Default': 1,
     },
     {
       'Book_ID': 'cet6',
       'Book_Name': 'CET-6',
       'Book_Name_EN': 'College English Test Band 6',
-      'Word_Count': 0,
+      'Word_Count': getCount('cet6'),
       'Tag_List': 'cet6',
       'Description': '大学英语六级词汇',
-      'Sort_Order': 2,
+      'Sort_Order': 3,
       'Is_Default': 1,
     },
     {
       'Book_ID': 'kaoyan',
       'Book_Name': '考研',
       'Book_Name_EN': 'Graduate Entrance Exam',
-      'Word_Count': 0,
+      'Word_Count': getCount('ky') ?? getCount('kaoyan'),
       'Tag_List': 'ky zk cet4 cet6',
       'Description': '考研英语词汇（含四六级核心词）',
-      'Sort_Order': 3,
+      'Sort_Order': 1,
       'Is_Default': 1,
     },
     {
       'Book_ID': 'toefl',
       'Book_Name': 'TOEFL',
       'Book_Name_EN': 'Test of English as a Foreign Language',
-      'Word_Count': 0,
+      'Word_Count': getCount('toefl'),
       'Tag_List': 'toefl',
       'Description': '托福学术英语词汇',
       'Sort_Order': 4,
@@ -652,7 +498,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'ielts',
       'Book_Name': 'IELTS',
       'Book_Name_EN': 'International English Language Testing System',
-      'Word_Count': 0,
+      'Word_Count': getCount('ielts'),
       'Tag_List': 'ielts',
       'Description': '雅思学术英语词汇',
       'Sort_Order': 5,
@@ -662,7 +508,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'gre',
       'Book_Name': 'GRE',
       'Book_Name_EN': 'Graduate Record Examination',
-      'Word_Count': 0,
+      'Word_Count': getCount('gre'),
       'Tag_List': 'gre',
       'Description': 'GRE 学术类研究生入学考试词汇',
       'Sort_Order': 6,
@@ -672,7 +518,7 @@ Future<void> _seedWordBooks(Database db) async {
       'Book_ID': 'kaoyan2027',
       'Book_Name': '2027考研',
       'Book_Name_EN': '2027 Graduate Entrance Exam',
-      'Word_Count': 0,
+      'Word_Count': getCount('ky') ?? getCount('kaoyan'),
       'Tag_List': 'ky zk cet4 cet6',
       'Description': '2027届考研英语词汇',
       'Sort_Order': 0,
@@ -686,7 +532,6 @@ Future<void> _seedWordBooks(Database db) async {
   }
   await batch.commit(noResult: true);
 
-  // 验证写入结果
   final count = (await db.query('WordBook')).length;
   print('[DB] _seedWordBooks 完成，已写入 ${books.length} 个词书，验证查询: $count 个');
   if (count != books.length) {
@@ -722,10 +567,16 @@ Future<void> _loadFromPrebuiltDb(Database romDb, Database hotDb) async {
   }
 
   // 步骤 1：加载 Note + Tree 数据
-  if (kIsWeb) {
-    await _loadPrebuiltNotesToWeb(romDb);
-  } else {
-    await _attachPrebuiltDb(romDb);
+  // Web: 用 JSON 分卷加载（直接读取 asset JSON）
+  // Desktop/Android/iOS: 也用 JSON 加载（.db 文件不在 APK 中，需要通过 JSON）
+  await _loadPrebuiltNotesFromJson(romDb);
+
+  // 步骤 2：验证加载结果
+  final noteCount = Sqflite.firstIntValue(
+      await romDb.rawQuery('SELECT COUNT(*) FROM Note')) ?? 0;
+  print('[DB] _loadFromPrebuiltDb: 最终 Note 数量: $noteCount');
+  if (noteCount == 0) {
+    print('[DB] _loadFromPrebuiltDb: 严重警告：Note 表为空！请检查 ecdict.db 导入是否成功');
   }
 
   print('[DB] _loadFromPrebuiltDb 完成');
@@ -744,13 +595,26 @@ Future<void> _attachPrebuiltDb(Database romDb) async {
   print('[DB] _attachPrebuiltDb: 读取 ecdict.db ${bytes.length} bytes');
 
   final tempDir = await getTemporaryDirectory();
+  // 使用不含空格的临时文件名，减少路径处理问题
   final tempPath =
-      '${tempDir.path}/ecdict_prebuilt_${DateTime.now().millisecondsSinceEpoch}.db';
+      '${tempDir.path.replaceAll(' ', '_')}/ecdict_prebuilt_${DateTime.now().millisecondsSinceEpoch}.db';
   final tempFile = File(tempPath);
+
+  // 确保目录存在
+  final dir = tempFile.parent;
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+
   await tempFile.writeAsBytes(bytes);
+  print('[DB] _attachPrebuiltDb: 写入临时文件: $tempPath (${bytes.length} bytes)');
 
   try {
-    await romDb.execute("ATTACH DATABASE '\$tempPath' AS prebuilt");
+    // Dart 单引号内的 $ 是字面量，所以这里用 + 拼接路径
+    // Windows 路径用正斜杠 / 更安全
+    final uriPath = tempPath.replaceAll(r'\', '/');
+    print('[DB] _attachPrebuiltDb: ATTACH with path: $uriPath');
+    await romDb.execute("ATTACH DATABASE '$uriPath' AS prebuilt");
     try {
       final noteCount = Sqflite.firstIntValue(
           await romDb.rawQuery('SELECT COUNT(*) FROM prebuilt.Note')) ?? 0;
@@ -761,10 +625,37 @@ Future<void> _attachPrebuiltDb(Database romDb) async {
         await romDb.execute('INSERT OR IGNORE INTO Resemble SELECT * FROM prebuilt.Resemble');
         await romDb.execute('INSERT OR REPLACE INTO Tree_Root SELECT * FROM prebuilt.Tree_Root');
         await romDb.execute('INSERT OR IGNORE INTO Tree_Word SELECT * FROM prebuilt.Tree_Word');
+      } else {
+        print('[DB] _attachPrebuiltDb: 严重错误：预编译 DB 中 Note 数量为 0！');
+      }
+      final noteAfter = Sqflite.firstIntValue(
+          await romDb.rawQuery('SELECT COUNT(*) FROM Note')) ?? 0;
+      final treeRootAfter = Sqflite.firstIntValue(
+          await romDb.rawQuery('SELECT COUNT(*) FROM Tree_Root')) ?? 0;
+      final treeWordAfter = Sqflite.firstIntValue(
+          await romDb.rawQuery('SELECT COUNT(*) FROM Tree_Word')) ?? 0;
+      print('[DB] _attachPrebuiltDb: 写入后 Note=$noteAfter, Tree_Root=$treeRootAfter, Tree_Word=$treeWordAfter');
+      if (noteAfter == 0) {
+        print('[DB] _attachPrebuiltDb: 致命错误：写入后 Note 表为空！');
       }
     } finally {
       await romDb.execute('DETACH DATABASE prebuilt');
     }
+  } catch (e, st) {
+    print('[DB] _attachPrebuiltDb: ATTACH 失败: $e');
+    print('[DB] tempPath=$tempPath');
+    print('[DB] stack: $st');
+    // 诊断：直接打开预编译 DB 看数据是否存在
+    try {
+      final testDb = await openDatabase(tempPath);
+      final testCount = Sqflite.firstIntValue(
+        await testDb.rawQuery('SELECT COUNT(*) FROM Note')) ?? 0;
+      print('[DB] 直接打开预编译 DB: Note数=$testCount');
+      await testDb.close();
+    } catch (testErr) {
+      print('[DB] 诊断打开失败: $testErr');
+    }
+    rethrow;
   } finally {
     try {
       await tempFile.delete();
@@ -773,10 +664,10 @@ Future<void> _attachPrebuiltDb(Database romDb) async {
 }
 
 /// Web 端：读取 ecdict_notes_manifest.json，逐卷加载 JSON，批量 insert
-Future<void> _loadPrebuiltNotesToWeb(Database romDb) async {
+Future<void> _loadPrebuiltNotesFromJson(Database romDb) async {
   const manifestAsset = 'assets/ecdict/ecdict_notes_manifest.json';
   if (!await _assetExists(manifestAsset)) {
-    print('[DB] _loadPrebuiltNotesToWeb: manifest 不存在，跳过');
+    print('[DB] _loadPrebuiltNotesFromJson: manifest 不存在，跳过');
     return;
   }
 
@@ -799,15 +690,15 @@ Future<void> _loadPrebuiltNotesToWeb(Database romDb) async {
       await batch.commit(noResult: true);
     }
 
-    // Web: Resemble + Tree JSON
-    await _loadPrebuiltResembleAndTreeToWeb(romDb);
+    // Resemble + Tree JSON
+    await _loadPrebuiltResembleAndTreeFromJson(romDb);
   } catch (e) {
-    print('[DB] _loadPrebuiltNotesToWeb 异常: $e');
+    print('[DB] _loadPrebuiltNotesFromJson 异常: $e');
   }
 }
 
-/// Web: Resemble + Tree 数据
-Future<void> _loadPrebuiltResembleAndTreeToWeb(Database romDb) async {
+/// 非 Web/桌面/Android: Resemble + Tree 数据（JSON 方式）
+Future<void> _loadPrebuiltResembleAndTreeFromJson(Database romDb) async {
   // Resemble
   try {
     const asset = 'assets/ecdict/ecdict_resemble.json';
@@ -889,8 +780,22 @@ Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
   final count = Sqflite.firstIntValue(await hotDb.rawQuery('SELECT COUNT(*) FROM Card'));
   print('[DB] seedHotDataIfNeeded 当前Card数量=$count');
 
-  // 确保词书数据已种入
-  await _seedWordBooks(hotDb);
+  // 读取词书统计，直接传入 _seedWordBooks
+  final countsAsset = 'assets/ecdict/ecdict_book_counts.json';
+  final bookCounts = <String, int>{};
+  if (await _assetExists(countsAsset)) {
+    try {
+      final raw = jsonDecode(await rootBundle.loadString(countsAsset)) as Map<String, dynamic>;
+      for (final e in raw.entries) {
+        bookCounts[e.key] = e.value as int;
+      }
+    } catch (e) {
+      print('[DB] seedHotDataIfNeeded: 词书统计读取失败: $e');
+    }
+  }
+
+  // 确保词书数据已种入（插入时就带正确词数，不再依赖后续 UPDATE）
+  await _seedWordBooks(hotDb, bookCounts);
 
   // 如果 Card 表为空或树表为空，从预编译 DB 加载
   if (count == null || count == 0) {
@@ -974,51 +879,51 @@ Future<void> seedHotDataIfNeeded(Database hotDb, Database romDb) async {
     return;
   }
 
-  print('[DB] seedHotDataIfNeeded 开始查询ROM数据...');
-  final notes = await romDb.query(kTableNote);
-  print('[DB] seedHotDataIfNeeded ROM Note数量=${notes.length}');
-  if (notes.isEmpty) {
-    print('[DB] seedHotDataIfNeeded ROM Note为空，跳过');
-    return;
-  }
-  final now = DateTime.now().millisecondsSinceEpoch;
-  final batch = hotDb.batch();
-  int insertedCount = 0;
-  for (int i = 0; i < notes.length; i++) {
-    final note = notes[i];
-    final spelling = (note['Spelling'] as String? ?? '').trim();
+    print('[DB] seedHotDataIfNeeded 开始查询ROM数据...');
+    final notes = await romDb.query(kTableNote);
+    print('[DB] seedHotDataIfNeeded ROM Note数量=${notes.length}');
+    if (notes.isEmpty) {
+      print('[DB] seedHotDataIfNeeded ROM Note为空，跳过');
+      return;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final batch = hotDb.batch();
+    int insertedCount = 0;
+    for (int i = 0; i < notes.length; i++) {
+      final note = notes[i];
+      final spelling = (note['Spelling'] as String? ?? '').trim();
     // 过滤无效单词：空单词、含空格、不含任何字母、首/第二字符非法、以 - 或 ' 开头
-    if (spelling.isEmpty || spelling.contains(' ') ||
-        !spelling.contains(RegExp(r'[a-zA-Z]')) ||
-        !_isAlpha(spelling.codeUnitAt(0)) ||
-        (spelling.length >= 2 && !_isAlpha(spelling.codeUnitAt(1))) ||
-        spelling.startsWith('-') || spelling.startsWith("'")) continue;
-    batch.insert(
-      kTableCard,
-      {
-        'Concept_UUID': note['Concept_UUID'] as String,
-        'Status': CardStatus.newCard,
-        'Next_Review_Date': now,
-        'R': 0.9,
-        'S': 1.0,
-        'Fail_Count': 0,
-        'Favorite': 0,
-        'Topic_Read': 0,
-        'Tree_Visit': 0,
-        'Random_Sort_ID': insertedCount,
-        'Tag_List': note['Tag_List'] as String?,
-      },
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
-    insertedCount++;
-  }
+      if (spelling.isEmpty || spelling.contains(' ') ||
+          !spelling.contains(RegExp(r'[a-zA-Z]')) ||
+          !_isAlpha(spelling.codeUnitAt(0)) ||
+          (spelling.length >= 2 && !_isAlpha(spelling.codeUnitAt(1))) ||
+          spelling.startsWith('-') || spelling.startsWith("'")) continue;
+      batch.insert(
+        kTableCard,
+        {
+          'Concept_UUID': note['Concept_UUID'] as String,
+          'Status': CardStatus.newCard,
+          'Next_Review_Date': now,
+          'R': 0.9,
+          'S': 1.0,
+          'Fail_Count': 0,
+          'Favorite': 0,
+          'Topic_Read': 0,
+          'Tree_Visit': 0,
+          'Random_Sort_ID': insertedCount,
+          'Tag_List': note['Tag_List'] as String?,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      insertedCount++;
+    }
   // 打乱插入顺序以实现随机排序
-  await hotDb.execute(
-    'UPDATE $kTableCard SET Random_Sort_ID = (ABS(RANDOM()) % $insertedCount) WHERE Random_Sort_ID >= 0',
-  );
-  print('[DB] seedHotDataIfNeeded 开始批量写入Card...');
-  await batch.commit(noResult: true);
-  print('[DB] seedHotDataIfNeeded 完成，插入 $insertedCount 张 Card（已过滤词组）');
+    await hotDb.execute(
+      'UPDATE $kTableCard SET Random_Sort_ID = (ABS(RANDOM()) % $insertedCount) WHERE Random_Sort_ID >= 0',
+    );
+    print('[DB] seedHotDataIfNeeded 开始批量写入Card...');
+    await batch.commit(noResult: true);
+    print('[DB] seedHotDataIfNeeded 完成，插入 $insertedCount 张 Card（已过滤词组）');
 }
 
 // ============================================================================
@@ -1235,29 +1140,35 @@ Future<List<WordBookModel>> queryAllWordBooks(Database db) async {
 
 /// 查询 Note 表统计信息（用于词库诊断）
 Future<Map<String, int>> queryNoteStats(Database romDb) async {
-  final total = Sqflite.firstIntValue(
-      await romDb.rawQuery('SELECT COUNT(*) FROM Note')) ?? 0;
-  final collinsPos = Sqflite.firstIntValue(
-      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE Collins_Star > 0')) ?? 0;
-  final bncPos = Sqflite.firstIntValue(
-      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE BNC > 0')) ?? 0;
-  final frqPos = Sqflite.firstIntValue(
-      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE FRQ > 0')) ?? 0;
-  final oxfordPos = Sqflite.firstIntValue(
-      await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE Is_Oxford > 0 OR Oxford_3000 > 0 OR Oxford_5000 > 0')) ?? 0;
-  final resembleCount = Sqflite.firstIntValue(
-      await romDb.rawQuery('SELECT COUNT(*) FROM Resemble')) ?? 0;
-  final synonymFilled = Sqflite.firstIntValue(
-      await romDb.rawQuery("SELECT COUNT(*) FROM Note WHERE Synonym_JSON IS NOT NULL AND Synonym_JSON != ''")) ?? 0;
-  return {
-    'total': total,
-    'collinsPos': collinsPos,
-    'bncPos': bncPos,
-    'frqPos': frqPos,
-    'oxfordPos': oxfordPos,
-    'resembleCount': resembleCount,
-    'synonymFilled': synonymFilled,
-  };
+  try {
+    final total = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Note')) ?? 0;
+    final collinsPos = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE Collins_Star > 0')) ?? 0;
+    final bncPos = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE BNC > 0')) ?? 0;
+    final frqPos = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE FRQ > 0')) ?? 0;
+    final oxfordPos = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Note WHERE Is_Oxford > 0 OR Oxford_3000 > 0 OR Oxford_5000 > 0')) ?? 0;
+    final resembleCount = Sqflite.firstIntValue(
+        await romDb.rawQuery('SELECT COUNT(*) FROM Resemble')) ?? 0;
+    final synonymFilled = Sqflite.firstIntValue(
+        await romDb.rawQuery("SELECT COUNT(*) FROM Note WHERE Synonym_JSON IS NOT NULL AND Synonym_JSON != ''")) ?? 0;
+    print('[DB] queryNoteStats: total=$total, collinsPos=$collinsPos, bncPos=$bncPos, frqPos=$frqPos');
+    return {
+      'total': total,
+      'collinsPos': collinsPos,
+      'bncPos': bncPos,
+      'frqPos': frqPos,
+      'oxfordPos': oxfordPos,
+      'resembleCount': resembleCount,
+      'synonymFilled': synonymFilled,
+    };
+  } catch (e) {
+    print('[DB] queryNoteStats 异常: $e');
+    return {'error': -1, 'total': 0};
+  }
 }
 
 /// 根据 Book_ID 查询词书
@@ -1433,6 +1344,7 @@ Future<List<ArticleModel>> queryArticlesByTopic(Database db, String topicId) asy
     kTableArticle,
     where: 'Topic_ID = ?',
     whereArgs: [topicId],
+    orderBy: 'Article_ID ASC',
   );
   return results.map((e) => ArticleModel.fromMap(e)).toList();
 }
@@ -1460,6 +1372,7 @@ class CardModel {
   double s; // Stability
   int failCount;
   int favorite;
+  int favoriteLearned;
   int topicRead;
   int treeVisit;
   int randomSortId;
@@ -1475,6 +1388,7 @@ class CardModel {
     required this.s,
     this.failCount = 0,
     this.favorite = 0,
+    this.favoriteLearned = 0,
     this.topicRead = 0,
     this.treeVisit = 0,
     required this.randomSortId,
@@ -1492,6 +1406,7 @@ class CardModel {
       s: (map['S'] as num).toDouble(),
       failCount: map['Fail_Count'] as int? ?? 0,
       favorite: map['Favorite'] as int? ?? 0,
+      favoriteLearned: map['Favorite_Learned'] as int? ?? 0,
       topicRead: map['Topic_Read'] as int? ?? 0,
       treeVisit: map['Tree_Visit'] as int? ?? 0,
       randomSortId: map['Random_Sort_ID'] as int,
@@ -1510,6 +1425,7 @@ class CardModel {
       'S': s,
       'Fail_Count': failCount,
       'Favorite': favorite,
+      'Favorite_Learned': favoriteLearned,
       'Topic_Read': topicRead,
       'Tree_Visit': treeVisit,
       'Random_Sort_ID': randomSortId,
@@ -2101,6 +2017,11 @@ Future<void> runMigrations(Database hotDb, Database romDb) async {
     print('[DB] Migration Card.Tag_List 回填失败: $e');
   }
 
+  // 迁移：为 Card 表添加 Favorite_Learned 列（如果不存在）
+  try {
+    await hotDb.execute('ALTER TABLE $kTableCard ADD COLUMN Favorite_Learned INTEGER DEFAULT 0');
+  } catch (_) {}
+
   // 日志修剪：保留与报表窗口一致（queryYearlyStats 默认 3 年），避免月度/年度统计被过早清空
   const reviewLogRetentionDays = 1095;
   final logCutoff =
@@ -2111,6 +2032,34 @@ Future<void> runMigrations(Database hotDb, Database romDb) async {
     where: 'Log_Date < ?',
     whereArgs: [logCutoff],
   );
+
+  // 迁移：为缺失的词书初始化 Book_Progress 记录
+  // 从 WordBook 表读取所有词书的总词数，为尚未写入 Book_Progress 的词书创建记录
+  try {
+    final books = await queryAllWordBooks(hotDb);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final book in books) {
+      final existing = await queryBookProgress(hotDb, book.bookId);
+      if (existing == null) {
+        // 用 WordBook.wordCount 作为总词数，已学数从 Card.Tag_List 统计
+        final learned = await _countLearnedCardsByTag(hotDb, book.tagList);
+        await hotDb.insert(
+          'Book_Progress',
+          {
+            'Book_ID': book.bookId,
+            'Book_Name': book.bookName,
+            'Total': book.wordCount,
+            'Current': learned,
+            'Last_Updated': now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        print('[DB] Migration: 初始化 Book_Progress for ${book.bookId} total=${book.wordCount} learned=$learned');
+      }
+    }
+  } catch (e) {
+    print('[DB] Migration Book_Progress 初始化失败: $e');
+  }
 }
 
 // ============================================================================
@@ -2320,4 +2269,187 @@ _JsonResult _jsonDecodeNumber(String s, int pos) {
       ? double.tryParse(numStr)
       : int.tryParse(numStr);
   return _JsonResult(num ?? 0, pos);
+}
+
+// ============================================================================
+// Book_Progress 表 & 模型
+// ============================================================================
+
+const String kCreateBookProgressSql = '''
+CREATE TABLE IF NOT EXISTS Book_Progress (
+    Book_ID TEXT PRIMARY KEY,
+    Book_Name TEXT NOT NULL,
+    Total INTEGER DEFAULT 0,
+    Current INTEGER DEFAULT 0,
+    Last_Updated INTEGER DEFAULT 0
+) STRICT;
+''';
+
+class BookProgressModel {
+  final String bookId;
+  final String bookName;
+  final int total;
+  final int current;
+  final int lastUpdated;
+
+  BookProgressModel({
+    required this.bookId,
+    required this.bookName,
+    required this.total,
+    required this.current,
+    required this.lastUpdated,
+  });
+
+  factory BookProgressModel.fromMap(Map<String, dynamic> map) {
+    return BookProgressModel(
+      bookId: map['Book_ID'] as String,
+      bookName: map['Book_Name'] as String,
+      total: map['Total'] as int? ?? 0,
+      current: map['Current'] as int? ?? 0,
+      lastUpdated: map['Last_Updated'] as int? ?? 0,
+    );
+  }
+}
+
+// ============================================================================
+// 缺失的查询和更新函数
+// ============================================================================
+
+/// 根据 Tag_List 中包含的任意标签统计已学卡片数（Status != 0）
+Future<int> _countLearnedCardsByTag(Database db, String tagList) async {
+  final tags = tagList.trim().split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+  if (tags.isEmpty) return 0;
+
+  // Card.Tag_List 格式为 JSON 数组，如 ["cet6"]，匹配包含目标标签的元素
+  final conditions = tags.map((_) => "Tag_List LIKE '%\"' || ? || '\"%'").join(' OR ');
+  final args = [...tags, ...tags];
+
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableCard WHERE Status != 0 AND ($conditions)',
+    args,
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<BookProgressModel?> queryBookProgress(Database db, String bookId) async {
+  final results = await db.query(
+    'Book_Progress',
+    where: 'Book_ID = ?',
+    whereArgs: [bookId],
+    limit: 1,
+  );
+  if (results.isEmpty) return null;
+  return BookProgressModel.fromMap(results.first);
+}
+
+Future<int> queryLearnedCountByBook(Database db, String bookId) async {
+  // 从 WordBook 表查找该词书的标签列表
+  final book = await queryWordBookById(db, bookId);
+  if (book == null) return 0;
+
+  // book.tagList 格式为 JSON 数组字符串，如 '["cet6","zk"]'，需要解析提取标签
+  List<String> _parseBookTagList(String tagList) {
+    final trimmed = tagList.trim();
+    if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return [];
+    final inner = trimmed.substring(1, trimmed.length - 1);
+    if (inner.isEmpty) return [];
+    final matches = RegExp(r'"([^"]+)"').allMatches(inner);
+    return matches.map((m) => m.group(1)!).toList();
+  }
+
+  final tags = _parseBookTagList(book.tagList);
+  if (tags.isEmpty) return 0;
+
+  // Card.Tag_List 格式为 JSON 数组，如 ["cet6"]，匹配包含目标标签的已学记录
+  final conditions = tags.map((_) => "Tag_List LIKE '%\"' || ? || '\"%'").join(' OR ');
+  final args = [...tags, ...tags];
+
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableCard WHERE Status != 0 AND ($conditions)',
+    args,
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<List<BookProgressModel>> queryAllBookProgress(Database db) async {
+  final results = await db.query('Book_Progress', orderBy: 'Book_ID ASC');
+  return results.map((e) => BookProgressModel.fromMap(e)).toList();
+}
+
+Future<int> queryTotalReviewCount(Database db) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableReviewLog',
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<Map<int, int>> queryTotalRatingDistribution(Database db) async {
+  final results = await db.rawQuery(
+    'SELECT Rating, COUNT(*) as cnt FROM $kTableReviewLog GROUP BY Rating',
+  );
+  return {for (final row in results) row['Rating'] as int: row['cnt'] as int};
+}
+
+Future<int> queryMatureCardCount(Database db) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableCard WHERE Status = 2 AND R >= 0.9',
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<int> queryMatureForgottenCount(Database db) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableCard WHERE Status = 2 AND R < 0.5',
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<int> queryHistoricalBacklogCount(Database db, int now) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableReviewLog WHERE Rating = 1 AND Log_Date < ?',
+    [now],
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<int> queryFavoriteLearnedCount(Database db) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableCard WHERE Favorite_Learned = 1',
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<int> queryDueFavoriteLearnedCount(Database db, int now) async {
+  final result = await db.rawQuery(
+    'SELECT COUNT(*) FROM $kTableCard WHERE Favorite_Learned = 1 AND Next_Review_Date <= ? AND Status IN (1,2,3)',
+    [now],
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<List<CardModel>> queryDueFavoriteLearnedCards(Database db, int now) async {
+  final results = await db.query(
+    kTableCard,
+    where: 'Favorite_Learned = 1 AND Next_Review_Date <= ? AND Status IN (1,2,3)',
+    whereArgs: [now],
+    orderBy: 'Next_Review_Date ASC',
+  );
+  return results.map((e) => CardModel.fromMap(e)).toList();
+}
+
+Future<void> updateCardFavoriteLearned(Database db, String conceptUuid) async {
+  await db.update(
+    kTableCard,
+    {'Favorite_Learned': 1},
+    where: 'Concept_UUID = ?',
+    whereArgs: [conceptUuid],
+  );
+}
+
+Future<void> incrementBookProgress(Database db, String bookId, int count) async {
+  await db.rawUpdate(
+    'INSERT INTO Book_Progress (Book_ID, Book_Name, Total, Current, Last_Updated) VALUES (?, ?, 0, ?, ?) '
+    'ON CONFLICT(Book_ID) DO UPDATE SET Current = Current + ?, Last_Updated = ?',
+    [bookId, bookId, count, DateTime.now().millisecondsSinceEpoch, count, DateTime.now().millisecondsSinceEpoch],
+  );
 }

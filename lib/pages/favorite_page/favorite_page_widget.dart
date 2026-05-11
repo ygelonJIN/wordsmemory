@@ -230,7 +230,7 @@ class _FavoritePageWidgetState extends State<FavoritePageWidget> {
                       children: [
                         Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
-                              60.0, 0.0, 0.0, 0.0),
+                              80.0, 0.0, 0.0, 0.0),
                           child: Text(
                             _model.remaining,
                             style: FlutterFlowTheme.of(context)
@@ -258,7 +258,7 @@ class _FavoritePageWidgetState extends State<FavoritePageWidget> {
                         Spacer(),
                         Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 0.0, 25.0, 0.0),
+                              0.0, 0.0, 80.0, 0.0),
                           child: Text(
                             _model.currentCollection,
                             style: FlutterFlowTheme.of(context)
@@ -298,35 +298,44 @@ class _FavoritePageWidgetState extends State<FavoritePageWidget> {
                             alignment: AlignmentDirectional(-1.0, 0.0),
                             child: Padding(
                               padding: EdgeInsetsDirectional.fromSTEB(
-                                  50.0, 0.0, 20.0, 0.0),
-                              child: Text(
-                                '复习',
-                                textAlign: TextAlign.start,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      font: GoogleFonts.notoSans(
+                                  50.0, 0.0, 50.0, 0.0),
+                              child: InkWell(
+                                splashColor: Colors.transparent,
+                                focusColor: Colors.transparent,
+                                hoverColor: Colors.transparent,
+                                highlightColor: Colors.transparent,
+                                onTap: () async {
+                                  await _model.startFavoriteReviewSession();
+                                },
+                                child: Text(
+                                  '复习',
+                                  textAlign: TextAlign.start,
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .override(
+                                        font: GoogleFonts.notoSans(
+                                          fontWeight: FontWeight.w500,
+                                          fontStyle: FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .fontStyle,
+                                        ),
+                                        color: Colors.black,
+                                        fontSize: 42.0,
+                                        letterSpacing: 0.0,
                                         fontWeight: FontWeight.w500,
                                         fontStyle: FlutterFlowTheme.of(context)
                                             .bodyMedium
                                             .fontStyle,
+                                        decoration: TextDecoration.underline,
+                                        lineHeight: 1.0,
                                       ),
-                                      color: Colors.black,
-                                      fontSize: 42.0,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.w500,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontStyle,
-                                      decoration: TextDecoration.underline,
-                                      lineHeight: 1.0,
-                                    ),
+                                ),
                               ),
                             ),
                           ),
                           Spacer(),
                           Align(
-                            alignment: AlignmentDirectional(0.0, 1.0),
+                            alignment: AlignmentDirectional(-1.0, 0.0),
                             child: Padding(
                               padding: EdgeInsetsDirectional.fromSTEB(
                                   20.0, 0.0, 50.0, 0.0),
@@ -336,8 +345,7 @@ class _FavoritePageWidgetState extends State<FavoritePageWidget> {
                                 hoverColor: Colors.transparent,
                                 highlightColor: Colors.transparent,
                                 onTap: () async {
-                                  context
-                                      .pushNamed(RandomAskPageWidget.routeName);
+                                  await _model.startFavoriteLearnSession();
                                 },
                                 child: Text(
                                   '学习',
@@ -371,116 +379,117 @@ class _FavoritePageWidgetState extends State<FavoritePageWidget> {
                     ),
                   ),
                   Expanded(
-                    child: Stack(
-                      children: [
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              20.0, 10.0, 20.0, 0.0),
-                          child: _model.isLoading
-                              ? Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.black54,
+                    child: RefreshIndicator(
+                      onRefresh: () => _model.refresh(),
+                      child: CustomScrollView(
+                        slivers: [
+                          if (_model.isLoading)
+                            SliverFillRemaining(
+                              child: Center(
+                                child: SizedBox(height: 40),
                               ),
                             )
-                              : ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  scrollDirection: Axis.vertical,
-                                  itemCount: _model.items.length,
-                                  itemBuilder: (context, index) {
-                                    final item = _model.items[index];
-                                    return Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          0.0, 15.0, 0.0, 15.0),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          Align(
-                                            alignment:
-                                                AlignmentDirectional(-1.0, 0.0),
+                          else if (_model.items.isEmpty)
+                            SliverFillRemaining(
+                              child: Center(
+                                child: Text(
+                                  '暂无收藏内容',
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      ?.copyWith(fontSize: 16),
+                                ),
+                              ),
+                            )
+                          else
+                            SliverPadding(
+                              padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                  final item = _model.items[index];
+                                  return Padding(
+                                    padding: EdgeInsetsDirectional.fromSTEB(
+                                        0.0, 10.0, 0.0, 10.0),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.max,
+                                      children: [
+                                        SizedBox(
+                                          width: 80.0,
+                                          child: InkWell(
+                                            splashColor: Colors.transparent,
+                                            focusColor: Colors.transparent,
+                                            hoverColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            onTap: () async {
+                                              await _model.removeFavorite(
+                                                  item.conceptUuid);
+                                            },
                                             child: Padding(
-                                              padding:
-                                                  EdgeInsetsDirectional.fromSTEB(
-                                                      10.0, 0.0, 10.0, 0.0),
+                                              padding: EdgeInsetsDirectional.fromSTEB(
+                                                  0.0, 5.0, 0.0, 5.0),
                                               child: Text(
-                                                item.spelling,
-                                                style: FlutterFlowTheme.of(
-                                                        context)
+                                                '移除',
+                                                style: FlutterFlowTheme.of(context)
                                                     .displayLarge
                                                     .override(
                                                   font: GoogleFonts.notoSans(
-                                                    fontWeight:
-                                                        FontWeight.w500,
-                                                    fontStyle: FlutterFlowTheme
-                                                            .of(context)
+                                                    fontWeight: FontWeight.w500,
+                                                    fontStyle: FlutterFlowTheme.of(context)
+                                                        .displayLarge
+                                                        .fontStyle,
+                                                  ),
+                                                  fontSize: 20.0,
+                                                  letterSpacing: 0.0,
+                                                  decoration: TextDecoration.underline,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 0.0),
+                                        Expanded(
+                                          child: InkWell(
+                                            splashColor: Colors.transparent,
+                                            focusColor: Colors.transparent,
+                                            hoverColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            onTap: () async {
+                                              await _model.onWordTap(item.conceptUuid);
+                                            },
+                                            child: Padding(
+                                              padding: EdgeInsetsDirectional.fromSTEB(
+                                                  0.0, 5.0, 10.0, 5.0),
+                                              child: Text(
+                                                item.isLearned
+                                                    ? item.spelling
+                                                    : '${item.spelling}*',
+                                                style: FlutterFlowTheme.of(context)
+                                                    .displayLarge
+                                                    .override(
+                                                  font: GoogleFonts.notoSans(
+                                                    fontWeight: FontWeight.w500,
+                                                    fontStyle: FlutterFlowTheme.of(context)
                                                         .displayLarge
                                                         .fontStyle,
                                                   ),
                                                   fontSize: 18.0,
                                                   letterSpacing: 0.0,
-                                                  fontWeight: FontWeight.w500,
-                                                  fontStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .displayLarge
-                                                      .fontStyle,
+                                                  decoration: TextDecoration.underline,
                                                 ),
                                               ),
                                             ),
                                           ),
-                                          Spacer(),
-                                          Align(
-                                            alignment:
-                                                AlignmentDirectional(-1.0, 0.0),
-                                            child: Padding(
-                                              padding:
-                                                  EdgeInsetsDirectional.fromSTEB(
-                                                      10.0, 0.0, 10.0, 0.0),
-                                              child: InkWell(
-                                                splashColor: Colors.transparent,
-                                                focusColor: Colors.transparent,
-                                                hoverColor: Colors.transparent,
-                                                highlightColor:
-                                                    Colors.transparent,
-                                                onTap: () async {
-                                                  await _model.removeFavorite(
-                                                      item.conceptUuid);
-                                                },
-                                                child: Text(
-                                                  '移除',
-                                                  style: FlutterFlowTheme.of(
-                                                          context)
-                                                      .displayLarge
-                                                      .override(
-                                                    font: GoogleFonts.notoSans(
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .displayLarge
-                                                              .fontStyle,
-                                                    ),
-                                                    fontSize: 20.0,
-                                                    letterSpacing: 0.0,
-                                                    fontWeight: FontWeight.w500,
-                                                    fontStyle: FlutterFlowTheme
-                                                            .of(context)
-                                                        .displayLarge
-                                                        .fontStyle,
-                                                    decoration: TextDecoration
-                                                        .underline,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                childCount: _model.items.length,
+                              ),
+                            ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

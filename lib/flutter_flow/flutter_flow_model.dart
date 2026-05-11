@@ -39,6 +39,7 @@ abstract class FlutterFlowModel<W extends Widget> {
   bool _isInitialized = false;
   void initState(BuildContext context);
   void _init(BuildContext context) {
+    _isInitialized = false;
     if (!_isInitialized) {
       initState(context);
       _isInitialized = true;

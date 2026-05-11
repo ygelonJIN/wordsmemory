@@ -35,11 +35,15 @@ class StudySession {
   /// 从结构树页点词进入时，记录当前 rootId，用于 Learn 结束后返回
   String? treeResumeRootId;
 
+  /// 是否从收藏夹进入的学习会话（影响 Favorite_Learned 标记）
+  bool fromFavorite;
+
   StudySession({
     required this.mode,
     required this.queue,
     this.currentIndex = 0,
     int? sessionStartTime,
+    this.fromFavorite = false,
   })  : sessionStartTime = sessionStartTime ?? DateTime.now().millisecondsSinceEpoch,
         learnedCards = [];
 
@@ -135,6 +139,35 @@ class StudySessionManager {
     return _currentSession!;
   }
 
+  /// 创建收藏夹复习会话：仅加载从收藏夹学过的、且到达 SRS 复习时间的卡片
+  Future<StudySession> createFavoriteReviewSession({int? limit}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var cards = await queryDueFavoriteLearnedCards(hotDb, now);
+    if (limit != null && cards.length > limit) {
+      cards = cards.sublist(0, limit);
+    }
+    _currentSession = StudySession(mode: StudyMode.favorite, queue: cards, fromFavorite: true);
+    _currentSession!.clearTopicReadingResume();
+    print('[Study] createFavoriteReviewSession: loaded ${cards.length} cards');
+    return _currentSession!;
+  }
+
+  /// 创建收藏夹学习会话：加载所有 Favorite=1 的卡片（limit 限制数量）
+  /// 与 createFavoriteSession 的区别：本方法加载全部卡片（不限状态），用于"学习收藏夹"
+  Future<StudySession> createFavoriteLearnSession({int? limit}) async {
+    var favCards = await queryFavoriteCards(hotDb);
+    if (limit != null && favCards.length > limit) {
+      favCards = favCards.sublist(0, limit);
+    }
+    _currentSession = StudySession(mode: StudyMode.favorite, queue: favCards, fromFavorite: true);
+    _currentSession!.clearTopicReadingResume();
+    // 立即将所有卡片的 Favorite_Learned 标记为 1
+    for (final card in favCards) {
+      await updateCardFavoriteLearned(hotDb, card.conceptUuid);
+    }
+    return _currentSession!;
+  }
+
   /// 从语义阅读页点词进入：创建单卡学习会话并携带恢复用 articleId / topicId
   Future<StudySession> createSingleCardLearnSession(
     String conceptUuid, {
@@ -150,6 +183,11 @@ class StudySessionManager {
       _currentSession = StudySession(mode: StudyMode.learn, queue: [card]);
       _currentSession!.topicReadingResumeArticleId = resumeArticleId;
       _currentSession!.topicReadingResumeTopicId = resumeTopicId;
+      // 若从收藏夹进入，标记 Favorite_Learned=1
+      if (resumeTopicId == 'favorite') {
+        _currentSession!.fromFavorite = true;
+        await updateCardFavoriteLearned(hotDb, conceptUuid);
+      }
       print('[Study] createSingleCardLearnSession: 会话已创建，resumeArticleId=$resumeArticleId');
     }
     return _currentSession!;
@@ -195,6 +233,13 @@ class StudySessionManager {
     // 记录本次复习时间，用于后续计算 R 值：R(t,S) = 1/(1+t/(9S))，t = now - lastReviewDate
     nextCard.lastReviewDate = now;
 
+    // 从数据库重新读取当前卡片的实时 favorite/favoriteLearned 值
+    final fresh = await queryCardByUuid(hotDb, current.conceptUuid);
+    if (fresh != null) {
+      nextCard.favorite = fresh.favorite;
+      nextCard.favoriteLearned = fresh.favoriteLearned;
+    }
+
     final log = createReviewLog(
       card: current,
       rating: rating,
@@ -207,6 +252,7 @@ class StudySessionManager {
 
     final currentCount = await querySettingInt(hotDb, 'total_study_count') ?? 0;
     await setSettingInt(hotDb, 'total_study_count', currentCount + 1);
+    print('[DEBUG-REPORTS] submitRating: total_study_count written = ${currentCount + 1}');
 
     _currentSession!.addLearned(nextCard);
 
@@ -275,6 +321,7 @@ class StudySessionManager {
     final duration = endTime - session.sessionStartTime;
     final totalTime = await querySettingInt(hotDb, 'total_study_time_ms') ?? 0;
     await setSettingInt(hotDb, 'total_study_time_ms', totalTime + duration);
+    print('[DEBUG-REPORTS] endSession: total_study_time_ms written = ${totalTime + duration} (added $duration)');
 
     final localDate = calculateLocalDateStr(endTime);
     final lastStudyDate = await querySetting(hotDb, 'last_study_date');
@@ -283,6 +330,7 @@ class StudySessionManager {
       await setSettingInt(hotDb, 'today_study_time_ms', duration);
       final days = await querySettingInt(hotDb, 'total_study_days') ?? 0;
       await setSettingInt(hotDb, 'total_study_days', days + 1);
+      print('[DEBUG-REPORTS] endSession: total_study_days written = ${days + 1} (lastStudyDate=$lastStudyDate, localDate=$localDate)');
       await setSetting(hotDb, 'last_study_date', localDate);
     } else {
       // 同一逻辑日：累加今日时长
@@ -290,9 +338,9 @@ class StudySessionManager {
       await setSettingInt(hotDb, 'today_study_time_ms', todayTime + duration);
     }
 
-    final bookCurrent = await querySettingInt(hotDb, 'book_progress_current') ?? 0;
-    await setSettingInt(hotDb, 'book_progress_current',
-        bookCurrent + session.learnedCards.length);
+    // 更新当前词书的 Book_Progress
+    final currentBook = await querySetting(hotDb, 'current_book') ?? 'cet4';
+    await incrementBookProgress(hotDb, currentBook, session.learnedCards.length);
 
     session.clearTopicReadingResume();
     _currentSession = null;
@@ -351,10 +399,24 @@ class StudySessionManager {
       final logId = await insertReviewLog(hotDb, log);
       print('[Confirm] Log created, logDate=$now');
       confirmedCard.lastReviewLogId = logId;
+
+      // 从数据库重新读取当前卡片的实时 favorite/favoriteLearned 值
+      final fresh = await queryCardByUuid(hotDb, confirmedCard.conceptUuid);
+      print('[Confirm] fresh.favorite=${fresh?.favorite}, confirmedCard.favorite=${confirmedCard.favorite}');
+      if (fresh != null) {
+        confirmedCard.favorite = fresh.favorite;
+        confirmedCard.favoriteLearned = fresh.favoriteLearned;
+      }
       await upsertCard(hotDb, confirmedCard);
 
       final currentCount = await querySettingInt(hotDb, 'total_study_count') ?? 0;
       await setSettingInt(hotDb, 'total_study_count', currentCount + 1);
+      print('[DEBUG-REPORTS] confirmPendingRating: total_study_count written = ${currentCount + 1}');
+
+      // 每学完一张卡立即更新词书进度，中途退出也能看到数字变化
+      final currentBook = await querySetting(hotDb, 'current_book') ?? 'cet4';
+      await incrementBookProgress(hotDb, currentBook, 1);
+      print('[Confirm] incrementBookProgress book=$currentBook +1');
 
       _currentSession!.learnedCards.add(confirmedCard);
       _currentSession!.queue[_currentSession!.currentIndex] = confirmedCard;
@@ -798,6 +860,7 @@ class TopicReadingManager {
     print('[TopicReadingManager] 返回 ArticleDisplayModel articleId=${article.articleId} readCount=$readCount');
     return ArticleDisplayModel(
       articleId: article.articleId,
+      topicId: article.topicId,
       topicName: topicModel.topicName,
       wordCount: article.wordCount,
       readCount: readCount,
@@ -917,6 +980,13 @@ class TopicReadingManager {
     return null;
   }
 
+  /// 根据专题和索引获取文章ID（0-based index）
+  Future<String?> getArticleIdByIndex(String topicId, int index) async {
+    final articles = await queryArticlesByTopic(romDb, topicId);
+    if (articles.isEmpty || index < 0 || index >= articles.length) return null;
+    return articles[index].articleId;
+  }
+
   /// 获取指定专题的所有文章列表及当前文章的索引
   /// 用于条件显示 Back/Next 按钮
   Future<TopicArticlesResult?> getTopicArticlesWithIndex(String topicId, String currentArticleId) async {
@@ -950,6 +1020,7 @@ class TopicArticlesResult {
 
 class ArticleDisplayModel {
   final String articleId;
+  final String topicId;
   final String topicName;
   final int wordCount;
   final int readCount;
@@ -957,6 +1028,7 @@ class ArticleDisplayModel {
 
   ArticleDisplayModel({
     required this.articleId,
+    required this.topicId,
     required this.topicName,
     required this.wordCount,
     required this.readCount,

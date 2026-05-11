@@ -307,12 +307,10 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.max,
                                         children: [
-                                          Align(
-                                            alignment:
-                                                AlignmentDirectional(-1.0, 0.0),
-                                            child: Padding(
-                                              padding: EdgeInsetsDirectional.fromSTEB(
-                                                  10.0, 5.0, 10.0, 5.0),
+                                          SizedBox(
+                                            width: 80.0,
+                                            child: Material(
+                                              color: Colors.transparent,
                                               child: InkWell(
                                                 splashColor: Colors.transparent,
                                                 focusColor: Colors.transparent,
@@ -321,6 +319,55 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                                                 onTap: () async {
                                                   await _model.toggleKnown(index);
                                                 },
+                                                child: Padding(
+                                                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 5.0, 0.0, 5.0),
+                                                  child: Text(
+                                                    item.statusText,
+                                                    style: FlutterFlowTheme.of(context)
+                                                        .displayLarge
+                                                        .override(
+                                                          font: GoogleFonts.notoSans(
+                                                            fontWeight: isKnown ? FontWeight.bold : FontWeight.w500,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .displayLarge
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: isKnown
+                                                              ? Color(0xFF0000FF)
+                                                              : FlutterFlowTheme.of(context).primary,
+                                                          fontSize: 20.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight: isKnown ? FontWeight.bold : FontWeight.w500,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(context)
+                                                                  .displayLarge
+                                                                  .fontStyle,
+                                                          decoration:
+                                                              TextDecoration.underline,
+                                                        ).copyWith(
+                                                          decorationColor: isKnown
+                                                              ? Color(0xFF0000FF)
+                                                              : FlutterFlowTheme.of(context).primary,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: 0.0),
+                                          Expanded(
+                                            child: InkWell(
+                                              splashColor: Colors.transparent,
+                                              focusColor: Colors.transparent,
+                                              hoverColor: Colors.transparent,
+                                              highlightColor: Colors.transparent,
+                                              onTap: () async {
+                                                await _model.onWordTap(item.conceptUuid);
+                                              },
+                                              child: Padding(
+                                                padding: EdgeInsetsDirectional.fromSTEB(0.0, 5.0, 10.0, 5.0),
                                                 child: Text(
                                                   item.spellingText,
                                                   style: FlutterFlowTheme.of(context)
@@ -335,7 +382,7 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                                                                   .fontStyle,
                                                         ),
                                                         color: isKnown
-                                                            ? FlutterFlowTheme.of(context).secondary
+                                                            ? Color(0xFF0000FF)
                                                             : FlutterFlowTheme.of(context).primary,
                                                         fontSize: 18.0,
                                                         letterSpacing: 0.0,
@@ -347,44 +394,12 @@ class _QuickLearnPage2WidgetState extends State<QuickLearnPage2Widget> {
                                                                 .fontStyle,
                                                         decoration:
                                                             TextDecoration.underline,
+                                                      ).copyWith(
+                                                        decorationColor: isKnown
+                                                            ? Color(0xFF0000FF)
+                                                            : FlutterFlowTheme.of(context).primary,
                                                       ),
                                                 ),
-                                              ),
-                                            ),
-                                          ),
-                                          Spacer(),
-                                          Align(
-                                            alignment:
-                                                AlignmentDirectional(1.0, 0.0),
-                                            child: Padding(
-                                              padding: EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 10.0, 0.0),
-                                              child: Text(
-                                                item.statusText,
-                                                style: FlutterFlowTheme.of(context)
-                                                    .displayLarge
-                                                    .override(
-                                                      font: GoogleFonts.notoSans(
-                                                        fontWeight: isKnown ? FontWeight.bold : FontWeight.w500,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .displayLarge
-                                                                .fontStyle,
-                                                      ),
-                                                      color: isKnown
-                                                          ? FlutterFlowTheme.of(context).secondary
-                                                          : FlutterFlowTheme.of(context).primary,
-                                                      fontSize: 20.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight: isKnown ? FontWeight.bold : FontWeight.w500,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(context)
-                                                              .displayLarge
-                                                              .fontStyle,
-                                                      decoration:
-                                                          TextDecoration.underline,
-                                                    ),
                                               ),
                                             ),
                                           ),

@@ -4,6 +4,7 @@ import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'topic_reading_page1_model.dart';
 export 'topic_reading_page1_model.dart';
@@ -28,7 +29,6 @@ class TopicReadingPage1Widget extends StatefulWidget {
 
 class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with WidgetsBindingObserver {
   late TopicReadingPage1Model _model;
-  String? _lastArticleId;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -36,18 +36,16 @@ class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with 
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    print('[Widget1] ★ initState articleId=${widget.articleId} topicId=${widget.topicId}');
     _model = createModel(context, () => TopicReadingPage1Model());
-    _lastArticleId = widget.articleId;
   }
 
   @override
   void didUpdateWidget(TopicReadingPage1Widget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 当 articleId 变化时（从 Learn 返回后重新加载同一页面），刷新数据
-    if (widget.articleId != _lastArticleId) {
-      _lastArticleId = widget.articleId;
-      _model.refreshData(widget.articleId ?? 'art_tech_read_01');
-    }
+    print('[Widget1] ★ didUpdateWidget old articleId=${oldWidget.articleId} new=${widget.articleId} old topicId=${oldWidget.topicId} new=${widget.topicId}');
+    _model.updateTopicId(widget.topicId);
+    _model.refreshData(widget.articleId ?? 'art_tech_read_01');
   }
 
   @override
@@ -61,6 +59,7 @@ class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    print('[Widget1] ★ dispose called');
     _model.dispose();
 
     super.dispose();
@@ -80,6 +79,7 @@ class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with 
         },
         child: Scaffold(
         key: scaffoldKey,
+        resizeToAvoidBottomInset: false,
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         body: Stack(
           children: [
@@ -259,6 +259,17 @@ class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with 
                     ),
                   ),
                   Align(
+                    alignment: AlignmentDirectional(1.0, 0.0),
+                    child: Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(0.0, 6.0, 20.0, 0.0),
+                      child: _ArticleProgressIndicator(
+                        currentIndex: _model.currentIndex,
+                        totalCount: _model.totalCount,
+                        onJump: (index) => _model.jumpToArticle(index),
+                      ),
+                    ),
+                  ),
+                  Align(
                     alignment: AlignmentDirectional(-1.0, 0.0),
                     child: Padding(
                       padding:
@@ -391,6 +402,150 @@ class _TopicReadingPage1WidgetState extends State<TopicReadingPage1Widget> with 
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ArticleProgressIndicator extends StatefulWidget {
+  final int currentIndex;
+  final int totalCount;
+  final void Function(int) onJump;
+
+  const _ArticleProgressIndicator({
+    required this.currentIndex,
+    required this.totalCount,
+    required this.onJump,
+  });
+
+  @override
+  State<_ArticleProgressIndicator> createState() => _ArticleProgressIndicatorState();
+}
+
+class _ArticleProgressIndicatorState extends State<_ArticleProgressIndicator> {
+  final FocusNode _focusNode = FocusNode();
+  late TextEditingController _controller;
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus && _isEditing) {
+      _save();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ArticleProgressIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditing) {
+      _controller.text = '${widget.currentIndex + 1}';
+    }
+  }
+
+  void _startEditing() {
+    setState(() {
+      _isEditing = true;
+      _controller.text = '${widget.currentIndex + 1}';
+    });
+    Future.delayed(const Duration(milliseconds: 50), () {
+      _focusNode.requestFocus();
+    });
+  }
+
+  void _save() {
+    setState(() => _isEditing = false);
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    final index = int.tryParse(text);
+    if (index != null) {
+      widget.onJump(index);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  TextStyle _editableStyle(BuildContext context) {
+    return GoogleFonts.inter(
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      color: Colors.black,
+      fontSize: 16.0,
+      letterSpacing: 0.0,
+      decoration: TextDecoration.underline,
+    );
+  }
+
+  TextStyle _staticStyle(BuildContext context) {
+    return GoogleFonts.inter(
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      color: Colors.black,
+      fontSize: 16.0,
+      letterSpacing: 0.0,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final y = widget.totalCount;
+
+    if (_isEditing) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          IntrinsicWidth(
+            stepHeight: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                style: _editableStyle(context),
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _save(),
+              ),
+            ),
+          ),
+          Text(' / ', style: _staticStyle(context)),
+          Text('$y', style: _staticStyle(context)),
+        ],
+      );
+    }
+    return GestureDetector(
+      onTap: _startEditing,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text('${widget.currentIndex + 1}', style: _editableStyle(context)),
+          Text(' / ', style: _staticStyle(context)),
+          Text('$y', style: _staticStyle(context)),
+        ],
       ),
     );
   }

@@ -56,7 +56,7 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
   String? loadError;
 
   // 直接暴露状态字段，避免每次读 DB；set 时直接修改 + updatePage 刷新
-  String currentBook = 'cet6';
+  String currentBook = 'cet4';
   int singleSessionLimit = 70;
   bool showEtymology = true;
   bool showDefinition = true;
@@ -170,6 +170,12 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
   Future<void> setDailyRefreshHour(int hour) async {
     await BackendManager.instance.updateSetting('daily_refresh_hour', hour.toString());
     updatePage(() => dailyRefreshHour = hour);
+  }
+
+  Future<void> saveUserName(String name) async {
+    final trimmed = name.trim();
+    await BackendManager.instance.updateSetting('user_name', trimmed);
+    await _loadData();
   }
 
   /// 导出存档；成功返回 true，失败返回 false（失败时 errorCode 字段有效）

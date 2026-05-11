@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:demo1red/backend/provider.dart';
 
 class ResultPageModel extends FlutterFlowModel<ResultPageWidget> {
+  bool _disposed = false;
+
   bool bgExpanded = false;
   String savingStatus = '正在保存中';
   String userName = '';
   String dailySummary = '';
   String sessionSummary = '';
   String learnedWords = '';
-  bool _disposed = false;
 
   // 数据统计字段
   String newCount = '';
@@ -57,22 +58,23 @@ class ResultPageModel extends FlutterFlowModel<ResultPageWidget> {
         });
 
         if (fromQuickLearn == true) {
-          // 快速筛选完成模式：显示本次标记的单词列表
+          // 快速筛选完成模式：调用 endSession 更新词书进度
+          final stats = await BackendManager.instance.endSession();
+          if (_disposed) return;
           final spellings = await BackendManager.instance.getQuickMarkedSpellings();
           if (_disposed) return;
           updatePage(() {
             dailySummary = '本次已标注${spellings.length}词';
             learnedWords = spellings.isNotEmpty ? spellings.join('，') : '（无）';
-            // 快速筛选模式不显示统计数据
-            newCount = '';
-            reviewCount = '';
-            relearnCount = '';
-            againPercent = '';
-            hardPercent = '';
-            goodPercent = '';
-            easyPercent = '';
-            avgStabilityChange = '';
-            avgRetrievabilityChange = '';
+            newCount = '新学数量:${stats.newCards}';
+            reviewCount = '复习数量:${stats.reviewCards}';
+            relearnCount = '重学数量:${stats.relearnCards}';
+            againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
+            hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
+            goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
+            easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
+            avgStabilityChange = '平均stability${stats.avgStabilityChange >= 0 ? '+' : ''}${stats.avgStabilityChange.toStringAsFixed(1)}days';
+            avgRetrievabilityChange = '平均retrievability${stats.avgRetrievabilityChange >= 0 ? '+' : ''}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
           });
         } else if (fromSemanticReading == true) {
           // 语义阅读完成模式：调用 endSession 获取学习统计

@@ -21,7 +21,7 @@ class TopicReadingPage2Widget extends StatefulWidget {
       _TopicReadingPage2WidgetState();
 }
 
-class _TopicReadingPage2WidgetState extends State<TopicReadingPage2Widget> {
+class _TopicReadingPage2WidgetState extends State<TopicReadingPage2Widget> with WidgetsBindingObserver {
   late TopicReadingPage2Model _model;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
@@ -29,11 +29,30 @@ class _TopicReadingPage2WidgetState extends State<TopicReadingPage2Widget> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    print('[Widget2] ★ initState articleId=${widget.articleId} topicId=${widget.topicId}');
     _model = createModel(context, () => TopicReadingPage2Model());
   }
 
   @override
+  void didUpdateWidget(TopicReadingPage2Widget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print('[Widget2] ★ didUpdateWidget old articleId=${oldWidget.articleId} new=${widget.articleId} old topicId=${oldWidget.topicId} new=${widget.topicId}');
+    _model.updateTopicId(widget.topicId);
+    _model.refreshData(widget.articleId ?? 'art_tech_read_02');
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _model.refreshData(widget.articleId ?? 'art_tech_read_02');
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    print('[Widget2] ★ dispose called');
     _model.dispose();
 
     super.dispose();
@@ -53,6 +72,7 @@ class _TopicReadingPage2WidgetState extends State<TopicReadingPage2Widget> {
       },
       child: Scaffold(
         key: scaffoldKey,
+        resizeToAvoidBottomInset: false,
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         body: Stack(
           children: [

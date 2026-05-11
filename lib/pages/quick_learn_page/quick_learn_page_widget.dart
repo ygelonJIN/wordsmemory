@@ -288,49 +288,79 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
           child: Row(
             mainAxisSize: MainAxisSize.max,
             children: [
-              Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(20.0, 5.0, 10.0, 5.0),
-                child: Text(
-                  item.spelling,
-                  softWrap: true,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlutterFlowTheme.of(context)
-                      .displayLarge
-                      .override(
-                        font: GoogleFonts.notoSans(
-                          fontWeight: FontWeight.w500,
-                          fontStyle: FlutterFlowTheme.of(context)
-                              .displayLarge
-                              .fontStyle,
-                        ),
-                        fontSize: 18.0,
-                        letterSpacing: 0.0,
-                        fontStyle: FlutterFlowTheme.of(context)
-                            .displayLarge
-                            .fontStyle,
-                      ),
+              SizedBox(
+                width: 80.0,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    splashColor: Colors.transparent,
+                    focusColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    onTap: () async {
+                      await _model.toggleKnown(index);
+                    },
+                    child: Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(0.0, 5.0, 0.0, 5.0),
+                      child: item.isKnown
+                          ? Text(
+                              '已认识',
+                              style: GoogleFonts.notoSans(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20.0,
+                                letterSpacing: 0.0,
+                                color: Color(0xFF0000FF),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF0000FF),
+                              ),
+                            )
+                          : Text(
+                              '认识',
+                              style: GoogleFonts.notoSans(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 20.0,
+                                letterSpacing: 0.0,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                    ),
+                  ),
                 ),
               ),
-              Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(10.0, 0.0, 20.0, 0.0),
-                child: Text(
-                  item.isKnown ? '已认识' : '认识',
-                  style: FlutterFlowTheme.of(context)
-                      .displayLarge
-                      .override(
-                        font: GoogleFonts.notoSans(
-                          fontWeight: FontWeight.w500,
-                          fontStyle: FlutterFlowTheme.of(context)
-                              .displayLarge
-                              .fontStyle,
-                        ),
-                        fontSize: 20.0,
-                        letterSpacing: 0.0,
-                        fontStyle: FlutterFlowTheme.of(context)
-                            .displayLarge
-                            .fontStyle,
-                        decoration: TextDecoration.underline,
-                      ),
+              SizedBox(width: 0.0),
+              Expanded(
+                child: InkWell(
+                  splashColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  onTap: () async {
+                    await _model.onWordTap(item.conceptUuid);
+                  },
+                  child: Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(0.0, 5.0, 10.0, 5.0),
+                    child: Text(
+                      item.spelling,
+                      softWrap: true,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlutterFlowTheme.of(context)
+                          .displayLarge
+                          .override(
+                            font: GoogleFonts.notoSans(
+                              fontWeight: FontWeight.w500,
+                              fontStyle: FlutterFlowTheme.of(context)
+                                  .displayLarge
+                                  .fontStyle,
+                            ),
+                            fontSize: 18.0,
+                            letterSpacing: 0.0,
+                            decoration: TextDecoration.underline,
+                            fontStyle: FlutterFlowTheme.of(context)
+                                .displayLarge
+                                .fontStyle,
+                          ),
+                    ),
+                  ),
                 ),
               ),
             ],

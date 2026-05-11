@@ -109,6 +109,7 @@ flutter:
     - assets/jsons/
     - assets/databases/
     - assets/ecdict/
+    - assets/reading/
 
 
 

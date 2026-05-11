@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:demo1red/backend/provider.dart';
 
 class QuickLearnPageModel extends FlutterFlowModel<QuickLearnPageWidget> {
+  bool _disposed = false;
+
   List<QuickLearnItemData> items = [];
   String progressText = '本次已标注: 0 个';
   bool isLoading = true;
-  bool _disposed = false;
-
   bool get hasNext => BackendManager.instance.hasNextQuickLearnPage();
   bool get hasPrev => BackendManager.instance.hasPrevQuickLearnPage();
 
@@ -57,6 +57,19 @@ class QuickLearnPageModel extends FlutterFlowModel<QuickLearnPageWidget> {
   Future<void> toggleKnown(int index) async {
     await BackendManager.instance.toggleQuickLearnKnown(index);
     refreshItems();
+  }
+
+  /// 点击单词，跳转到 Learn 页面
+  Future<void> onWordTap(String conceptUuid) async {
+    final ctx = context;
+    if (ctx == null) return;
+    try {
+      await BackendManager.instance.startQuickLearnWordSession(conceptUuid);
+      ctx.pushNamed(RandomAskPageWidget.routeName);
+    } catch (e) {
+      print('[QuickLearn] onWordTap 异常: $e');
+      ctx.pushNamed(ErrorPageWidget.routeName);
+    }
   }
 
   /// 加载下一页

@@ -109,11 +109,6 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => LoadingPageWidget(),
         ),
         FFRoute(
-          name: RandomLearnPage2Widget.routeName,
-          path: RandomLearnPage2Widget.routePath,
-          builder: (context, params) => RandomLearnPage2Widget(),
-        ),
-        FFRoute(
           name: RandomLearnPageWidget.routeName,
           path: RandomLearnPageWidget.routePath,
           builder: (context, params) => RandomLearnPageWidget(),

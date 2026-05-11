@@ -93,44 +93,57 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
               ),
             ),
             Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0.0, 55.0, 0.0, 60.0),
+              padding: EdgeInsetsDirectional.fromSTEB(0.0, 60.0, 0.0, 0.0),
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 children: [
-                  Align(
-                    alignment: AlignmentDirectional(1.0, 0.0),
-                    child: Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
-                      child: Text(
-                        _model.userName,
-                        style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FontWeight.normal,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .fontStyle,
-                              ),
-                              color: Colors.black,
-                              fontSize: 42.0,
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.normal,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .fontStyle,
-                            ),
-                      ),
+                  Padding(
+                    padding:
+                        EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        InkWell(
+                          splashColor: Colors.transparent,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () async {
+                            context.pushNamed(HomePageWidget.routeName);
+                          },
+                          child: Text(
+                            'home',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.notoSans(
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                                  fontSize: 18.0,
+                                  letterSpacing: 0.0,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                  decoration: TextDecoration.underline,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Align(
-                    alignment: AlignmentDirectional(1.0, 0.0),
+                    alignment: AlignmentDirectional(-1.0, 0.0),
                     child: Padding(
                       padding:
-                          EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 20.0, 0.0),
+                          EdgeInsetsDirectional.fromSTEB(12.0, 5.0, 12.0, 0.0),
                       child: Text(
-                        '你的设置',
+                        '设置',
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.inter(
+                              font: GoogleFonts.notoSans(
                                 fontWeight: FlutterFlowTheme.of(context)
                                     .bodyMedium
                                     .fontWeight,
@@ -210,7 +223,6 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                             ),
                           ),
                         ),
-                        Spacer(),
                         InkWell(
                           splashColor: Colors.transparent,
                           focusColor: Colors.transparent,
@@ -227,7 +239,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                             // success/cancelled: 不做操作，静默返回
                           },
                           child: Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 20.0, 0.0),
+                            padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
                             child: Text(
                               '备份存档',
                               style: FlutterFlowTheme.of(context)
@@ -283,35 +295,79 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                     ),
                   ),
                   Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          scrollDirection: Axis.vertical,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_model.wordBooks.isNotEmpty) ...[
-                                  _WordBookItem(
-                                    book: _model.wordBooks.first,
-                                    isSelected: _model.currentBook == _model.wordBooks.first.bookId,
-                                    leftPadding: 20.0,
-                                    onTap: () => _model.setCurrentBook(_model.wordBooks.first.bookId),
-                                  ),
-                                  ..._model.wordBooks.skip(1).map((book) {
-                                    return _WordBookItem(
-                                      book: book,
-                                      isSelected: _model.currentBook == book.bookId,
-                                      leftPadding: 0.0,
-                                      onTap: () => _model.setCurrentBook(book.bookId),
-                                    );
-                                  }),
-                                ],
-                              ],
-                            ),
+                            if (_model.wordBooks.isNotEmpty)
+                              _WordBookItem(
+                                book: _model.wordBooks[0],
+                                isSelected: _model.currentBook == _model.wordBooks[0].bookId,
+                                leftPadding: 20.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[0].bookId),
+                              ),
+                            if (_model.wordBooks.length > 1)
+                              _WordBookItem(
+                                book: _model.wordBooks[1],
+                                isSelected: _model.currentBook == _model.wordBooks[1].bookId,
+                                leftPadding: 0.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[1].bookId),
+                              ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_model.wordBooks.length > 2)
+                              _WordBookItem(
+                                book: _model.wordBooks[2],
+                                isSelected: _model.currentBook == _model.wordBooks[2].bookId,
+                                leftPadding: 20.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[2].bookId),
+                              ),
+                            if (_model.wordBooks.length > 3)
+                              _WordBookItem(
+                                book: _model.wordBooks[3],
+                                isSelected: _model.currentBook == _model.wordBooks[3].bookId,
+                                leftPadding: 0.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[3].bookId),
+                              ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_model.wordBooks.length > 4)
+                              _WordBookItem(
+                                book: _model.wordBooks[4],
+                                isSelected: _model.currentBook == _model.wordBooks[4].bookId,
+                                leftPadding: 20.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[4].bookId),
+                              ),
+                            if (_model.wordBooks.length > 5)
+                              _WordBookItem(
+                                book: _model.wordBooks[5],
+                                isSelected: _model.currentBook == _model.wordBooks[5].bookId,
+                                leftPadding: 0.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[5].bookId),
+                              ),
+                            if (_model.wordBooks.length > 6)
+                              _WordBookItem(
+                                book: _model.wordBooks[6],
+                                isSelected: _model.currentBook == _model.wordBooks[6].bookId,
+                                leftPadding: 0.0,
+                                rightPadding: 12.0,
+                                onTap: () => _model.setCurrentBook(_model.wordBooks[6].bookId),
+                              ),
                           ],
                         ),
                         ListView(
@@ -359,28 +415,28 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                     hoverColor: Colors.transparent,
                                     highlightColor: Colors.transparent,
                                     onTap: () => _model.setSingleSessionLimit(100),
-                                    child: Text(
-                                      '100',
-                                      textAlign: TextAlign.center,
-                                      style: FlutterFlowTheme.of(context)
-                                          .displayLarge
-                                          .override(
-                                            font: GoogleFonts.notoSans(
-                                              fontWeight: _model.singleSessionLimit == 100
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.singleSessionLimit == 100
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
+                                  child: Text(
+                                    '100',
+                                    textAlign: TextAlign.center,
+                                    style: FlutterFlowTheme.of(context)
+                                        .displayLarge
+                                        .override(
+                                          font: GoogleFonts.notoSans(
                                             fontWeight: _model.singleSessionLimit == 100
                                                 ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                : FontWeight.normal,
+                                            fontStyle: FlutterFlowTheme.of(context)
+                                                .displayLarge
+                                                .fontStyle,
+                                          ),
+                                          color: _model.singleSessionLimit == 100
+                                              ? const Color(0xFF0000FF)
+                                              : Colors.black,
+                                          fontSize: 20.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight: _model.singleSessionLimit == 100
+                                              ? FontWeight.w700
+                                              : FontWeight.w400,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -404,9 +460,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         .displayLarge
                                         .override(
                                           font: GoogleFonts.notoSans(
-                                            fontWeight: _model.singleSessionLimit == 70
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 70
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -416,9 +472,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                               : Colors.black,
                                           fontSize: 20.0,
                                           letterSpacing: 0.0,
-                                          fontWeight: _model.singleSessionLimit == 70
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 70
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -441,9 +497,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         .displayLarge
                                         .override(
                                           font: GoogleFonts.notoSans(
-                                            fontWeight: _model.singleSessionLimit == 50
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 50
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -453,9 +509,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                               : Colors.black,
                                           fontSize: 20.0,
                                           letterSpacing: 0.0,
-                                          fontWeight: _model.singleSessionLimit == 50
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 50
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -478,9 +534,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         .displayLarge
                                         .override(
                                           font: GoogleFonts.notoSans(
-                                            fontWeight: _model.singleSessionLimit == 30
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 30
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -490,9 +546,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                               : Colors.black,
                                           fontSize: 20.0,
                                           letterSpacing: 0.0,
-                                          fontWeight: _model.singleSessionLimit == 30
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 30
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -515,9 +571,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         .displayLarge
                                         .override(
                                           font: GoogleFonts.notoSans(
-                                            fontWeight: _model.singleSessionLimit == 20
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 20
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -527,9 +583,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                               : Colors.black,
                                           fontSize: 20.0,
                                           letterSpacing: 0.0,
-                                          fontWeight: _model.singleSessionLimit == 20
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
+                                              fontWeight: _model.singleSessionLimit == 20
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -554,21 +610,21 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           .displayLarge
                                           .override(
                                             font: GoogleFonts.notoSans(
-                                              fontWeight: _model.singleSessionLimit == 10
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.singleSessionLimit == 10
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
                                             fontWeight: _model.singleSessionLimit == 10
                                                 ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                : FontWeight.normal,
+                                            fontStyle: FlutterFlowTheme.of(context)
+                                                .displayLarge
+                                                .fontStyle,
+                                          ),
+                                          color: _model.singleSessionLimit == 10
+                                              ? const Color(0xFF0000FF)
+                                              : Colors.black,
+                                          fontSize: 20.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight: _model.singleSessionLimit == 10
+                                              ? FontWeight.w700
+                                              : FontWeight.w400,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -700,21 +756,21 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           .displayLarge
                                           .override(
                                             font: GoogleFonts.notoSans(
-                                              fontWeight: _model.showEtymology
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.showEtymology
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
                                             fontWeight: _model.showEtymology
                                                 ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                : FontWeight.normal,
+                                            fontStyle: FlutterFlowTheme.of(context)
+                                                .displayLarge
+                                                .fontStyle,
+                                          ),
+                                          color: _model.showEtymology
+                                              ? const Color(0xFF0000FF)
+                                              : Colors.black,
+                                          fontSize: 20.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight: _model.showEtymology
+                                              ? FontWeight.w700
+                                              : FontWeight.w400,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -740,7 +796,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           font: GoogleFonts.notoSans(
                                             fontWeight: _model.showDefinition
                                                 ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -752,7 +808,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           letterSpacing: 0.0,
                                           fontWeight: _model.showDefinition
                                               ? FontWeight.w700
-                                              : FontWeight.w500,
+                                              : FontWeight.w400,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -777,7 +833,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           font: GoogleFonts.notoSans(
                                             fontWeight: _model.showExample
                                                 ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -789,7 +845,7 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           letterSpacing: 0.0,
                                           fontWeight: _model.showExample
                                               ? FontWeight.w700
-                                              : FontWeight.w500,
+                                              : FontWeight.w400,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -860,19 +916,19 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                             font: GoogleFonts.notoSans(
                                               fontWeight: _model.dailyRefreshHour == 0
                                                   ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.dailyRefreshHour == 0
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: _model.dailyRefreshHour == 0
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                  : FontWeight.normal,
+                                            fontStyle: FlutterFlowTheme.of(context)
+                                                .displayLarge
+                                                .fontStyle,
+                                          ),
+                                          color: _model.dailyRefreshHour == 0
+                                              ? const Color(0xFF0000FF)
+                                              : Colors.black,
+                                          fontSize: 20.0,
+                                          letterSpacing: 0.0,
+                                              fontWeight: _model.dailyRefreshHour == 0
+                                                  ? FontWeight.w700
+                                                  : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -896,21 +952,21 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         .displayLarge
                                         .override(
                                           font: GoogleFonts.notoSans(
-                                            fontWeight: _model.dailyRefreshHour == 4
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.dailyRefreshHour == 4
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.dailyRefreshHour == 4
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
+                                                  fontWeight: _model.dailyRefreshHour == 4
+                                                      ? FontWeight.w700
+                                                      : FontWeight.normal,
+                                              fontStyle: FlutterFlowTheme.of(context)
+                                                  .displayLarge
+                                                  .fontStyle,
+                                            ),
+                                            color: _model.dailyRefreshHour == 4
+                                                ? const Color(0xFF0000FF)
+                                                : Colors.black,
+                                            fontSize: 20.0,
+                                            letterSpacing: 0.0,
+                                                  fontWeight: _model.dailyRefreshHour == 4
+                                                      ? FontWeight.w700
+                                                      : FontWeight.normal,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -933,21 +989,21 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         .displayLarge
                                         .override(
                                           font: GoogleFonts.notoSans(
-                                            fontWeight: _model.dailyRefreshHour == 8
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.dailyRefreshHour == 8
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.dailyRefreshHour == 8
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
+                                                  fontWeight: _model.dailyRefreshHour == 8
+                                                      ? FontWeight.w700
+                                                      : FontWeight.normal,
+                                              fontStyle: FlutterFlowTheme.of(context)
+                                                  .displayLarge
+                                                  .fontStyle,
+                                            ),
+                                            color: _model.dailyRefreshHour == 8
+                                                ? const Color(0xFF0000FF)
+                                                : Colors.black,
+                                            fontSize: 20.0,
+                                            letterSpacing: 0.0,
+                                                  fontWeight: _model.dailyRefreshHour == 8
+                                                      ? FontWeight.w700
+                                                      : FontWeight.normal,
                                           fontStyle: FlutterFlowTheme.of(context)
                                               .displayLarge
                                               .fontStyle,
@@ -972,9 +1028,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                           .displayLarge
                                           .override(
                                             font: GoogleFonts.notoSans(
-                                              fontWeight: _model.dailyRefreshHour == 18
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
+                                                  fontWeight: _model.dailyRefreshHour == 18
+                                                      ? FontWeight.w700
+                                                      : FontWeight.normal,
                                               fontStyle: FlutterFlowTheme.of(context)
                                                   .displayLarge
                                                   .fontStyle,
@@ -984,9 +1040,9 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                                 : Colors.black,
                                             fontSize: 20.0,
                                             letterSpacing: 0.0,
-                                            fontWeight: _model.dailyRefreshHour == 18
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                                  fontWeight: _model.dailyRefreshHour == 18
+                                                      ? FontWeight.w700
+                                                      : FontWeight.normal,
                                             fontStyle: FlutterFlowTheme.of(context)
                                                 .displayLarge
                                                 .fontStyle,
@@ -1006,41 +1062,6 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                 ],
               ),
             ),
-            Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(20.0, 60.0, 20.0, 0.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () async {
-                      context.safePop();
-                    },
-                    child: Text(
-                      'back',
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .fontStyle,
-                            ),
-                            fontSize: 18.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
-                            fontStyle: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .fontStyle,
-                            decoration: TextDecoration.underline,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
@@ -1054,18 +1075,20 @@ class _WordBookItem extends StatelessWidget {
     required this.book,
     required this.isSelected,
     required this.leftPadding,
+    required this.rightPadding,
     required this.onTap,
   });
 
   final WordBookModel book;
   final bool isSelected;
   final double leftPadding;
+  final double rightPadding;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: leftPadding, right: 6.0),
+      padding: EdgeInsets.only(left: leftPadding, right: rightPadding),
       child: InkWell(
         splashColor: Colors.transparent,
         focusColor: Colors.transparent,
@@ -1085,7 +1108,7 @@ class _WordBookItem extends StatelessWidget {
                 color: isSelected ? const Color(0xFF0000FF) : Colors.black,
                 fontSize: 20.0,
                 letterSpacing: 0.0,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                 fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
                 decoration: TextDecoration.underline,
                 lineHeight: 1.5,

@@ -36,6 +36,18 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
     super.dispose();
   }
 
+  double _wordFontSize(String word) {
+    final len = word.length;
+    if (len <= 4) return 86.0;
+    if (len <= 6) return 72.0;
+    if (len <= 8) return 62.0;
+    if (len <= 10) return 50.0;
+    if (len <= 12) return 46.0;
+    if (len <= 14) return 42.0;
+    if (len <= 16) return 36.0;
+    return 26.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     _model.setOnUpdate(
@@ -129,14 +141,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                     _model.cardData?.collinsStarText ?? '',
                     style: FlutterFlowTheme.of(context).bodyMedium.override(
                           font: GoogleFonts.notoSans(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
                           ),
                           fontSize: 16.0,
                           letterSpacing: 0.0,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                   ),
                   Spacer(),
@@ -168,13 +180,13 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                   _model.cardData?.statusText ?? 'status:new',
                   style: FlutterFlowTheme.of(context).bodyMedium.override(
                         font: GoogleFonts.notoSans(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                           fontStyle:
                               FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                         ),
                         fontSize: 15.0,
                         letterSpacing: 0.0,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                         fontStyle:
                             FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                       ),
@@ -193,14 +205,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.againText ?? 'again:0%',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -211,14 +223,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.retrievabilityText ?? 'retrievability:0%',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -240,14 +252,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.hardText ?? 'hard:0%',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -258,14 +270,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.stabilityText ?? 'stability:0days',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -287,14 +299,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.goodText ?? 'good:0%',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -305,14 +317,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.bncText ?? '',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -334,14 +346,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.easyText ?? 'easy:0%',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -352,14 +364,14 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                       _model.cardData?.frqText ?? '',
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.notoSans(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
                             ),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             fontStyle: FlutterFlowTheme.of(context)
                                 .bodyMedium
                                 .fontStyle,
@@ -385,7 +397,7 @@ class _RandomAskPageWidgetState extends State<RandomAskPageWidget> {
                             FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                       ),
                       color: Colors.black,
-                      fontSize: 64.0,
+                      fontSize: _wordFontSize(_model.cardData?.spelling ?? ''),
                       letterSpacing: 0.0,
                       fontWeight: FontWeight.w800,
                       fontStyle:

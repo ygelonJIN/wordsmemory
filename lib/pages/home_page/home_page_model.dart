@@ -10,10 +10,11 @@ class HomePageModel extends FlutterFlowModel<HomePageWidget> {
   String greeting = 'Hi,';
   String todayLearned = '今日已学0词，0min';
   String exportWarning = '已0天未备份';
-  String remaining = '剩余：0';
-  String bookProgress = '当前词书：0/5000';
+  String remaining = '';
+  String bookProgress = '';
   int dailyTarget = 1000;
   bool _isLoading = false;
+  String? loadError;
 
   @override
   void initState(BuildContext context) {
@@ -25,9 +26,10 @@ class HomePageModel extends FlutterFlowModel<HomePageWidget> {
     if (_isLoading) return;
     _isLoading = true;
     try {
-      if (!BackendManager.instance.isInitialized) {
-        await BackendManager.instance.initialize();
-      }
+      await BackendManager.instance.initialize().timeout(
+        Duration(seconds: 5),
+        onTimeout: () => print('[HomePage] initialize() 超时！'),
+      );
       final data = await BackendManager.instance.loadHomePageData();
       if (!_disposed) {
         updatePage(() {
@@ -38,15 +40,29 @@ class HomePageModel extends FlutterFlowModel<HomePageWidget> {
           remaining = data.remainingText;
           bookProgress = data.bookProgressText;
           dailyTarget = data.dailyTarget;
+          loadError = null;
         });
       }
     } catch (e) {
-      // 数据加载失败，保持占位符不变
+      print('[HomePage] _loadData 异常: $e');
+      if (!_disposed) {
+        updatePage(() {
+          loadError = e.toString();
+        });
+      }
     } finally {
       _isLoading = false;
     }
   }
 
+  /// 公开刷新方法，供页面从设置页返回时调用
+  Future<void> refresh() async {
+    _disposed = false;
+    _isLoading = false;
+    await _loadData();
+  }
+
+  /// 保存用户名
   Future<void> saveUserName(String name) async {
     final trimmed = name.trim();
     await BackendManager.instance.updateSetting('user_name', trimmed);
@@ -55,8 +71,10 @@ class HomePageModel extends FlutterFlowModel<HomePageWidget> {
 
   Future<void> saveDailyTarget(int target) async {
     if (target <= 0) return;
+    // 先更新本地状态（避免依赖 _loadData 导致的 DB 竞态，参考 SettingPageModel 的 setter 模式）
+    updatePage(() => dailyTarget = target);
+    // 异步持久化到数据库
     await BackendManager.instance.updateSetting('daily_target', target.toString());
-    await _loadData();
   }
 
   bool _disposed = false;

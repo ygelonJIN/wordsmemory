@@ -228,7 +228,7 @@ String _formatPct(double v) {
 // ============================================================================
 
 /// 全局数据库管理器
-class BackendManager {
+class BackendManager extends ChangeNotifier {
   static BackendManager? _instance;
   static BackendManager get instance => _instance ??= BackendManager._();
 
@@ -248,6 +248,8 @@ class BackendManager {
   Stream<LoadingStatus> get loadingStatusStream => _loadingStatusController.stream;
 
   bool get isInitialized => _romDb != null && _hotDb != null;
+
+  Database? get hotDb => _hotDb;
 
   /// 应用启动时调用（对应 LoadingPage）
   /// 通过 loadingStatusStream 推送各阶段状态
@@ -398,7 +400,9 @@ class BackendManager {
     print('[Backend] 初始化全部完成');
   }
 
+  @override
   void dispose() {
+    super.dispose();
     _loadingStatusController.close();
   }
 
@@ -416,11 +420,30 @@ class BackendManager {
 
     final userName = await querySetting(_hotDb!, 'user_name') ?? '';
     final dailyTarget = int.tryParse(await querySetting(_hotDb!, 'daily_target') ?? '1000') ?? 1000;
-    final bookCurrent = int.tryParse(await querySetting(_hotDb!, 'book_progress_current') ?? '0') ?? 0;
-    final bookTotal = int.tryParse(await querySetting(_hotDb!, 'book_progress_total') ?? '5000') ?? 5000;
     final totalStudyCount = int.tryParse(await querySetting(_hotDb!, 'total_study_count') ?? '0') ?? 0;
     final totalDays = int.tryParse(await querySetting(_hotDb!, 'total_study_days') ?? '0') ?? 0;
     final lastExportTime = int.tryParse(await querySetting(_hotDb!, 'last_export_time') ?? '0') ?? 0;
+    final currentBook = await querySetting(_hotDb!, 'current_book') ?? 'cet4';
+
+    // 从 Book_Progress 表查当前词书的进度，Total 从 WordBook 表取
+    print('[Provider] loadHomePageData: currentBook=$currentBook');
+    int bookTotal;
+    int bookCurrent;
+
+  // 从 WordBook 表取总词数和显示名称
+    final book = await queryWordBookById(_hotDb!, currentBook);
+    String? bookDisplayName;
+    if (book != null) {
+      bookTotal = book.wordCount;
+      bookDisplayName = book.bookName;
+    } else {
+      bookTotal = 0;
+      bookDisplayName = null;
+    }
+
+    // 始终从 Card 表按词书标签统计已学数量（不过度依赖 Book_Progress 表）
+    bookCurrent = await queryLearnedCountByBook(_hotDb!, currentBook);
+    print('[Provider] loadHomePageData: bookTotal=$bookTotal bookCurrent=$bookCurrent bookDisplayName=$bookDisplayName');
 
     final todayCount = await queryLogCountByDate(_hotDb!, calculateLocalDateStr(now));
     final todayTimeMs = await _queryTodayStudyTimeMs(_hotDb!, calculateLocalDateStr(now));
@@ -452,6 +475,8 @@ class BackendManager {
       newCount: newCount,
       daysSinceExport: daysSinceExport,
       exportWarning: exportWarning,
+      currentBook: currentBook,
+      bookDisplayName: bookDisplayName,
     );
   }
 
@@ -658,10 +683,45 @@ class BackendManager {
     await _studyManager!.createTreeLearnSession(conceptUuid, rootId);
   }
 
+  /// 从快速筛选页点词进入：创建单卡学习会话，不修改 Quick_Screen 状态
+  Future<void> startQuickLearnWordSession(String conceptUuid) async {
+    _ensureInitialized();
+    print('[Provider] startQuickLearnWordSession uuid=$conceptUuid');
+    await _studyManager!.createSingleCardLearnSession(
+      conceptUuid,
+      resumeArticleId: 'quick_learn',
+      resumeTopicId: 'quick_learn',
+    );
+  }
+
+  /// 从收藏夹点词进入：创建单卡学习会话，计入总进度
+  Future<void> startFavoriteWordSession(String conceptUuid) async {
+    _ensureInitialized();
+    print('[Provider] startFavoriteWordSession uuid=$conceptUuid');
+    await _studyManager!.createSingleCardLearnSession(
+      conceptUuid,
+      resumeArticleId: 'favorite',
+      resumeTopicId: 'favorite',
+    );
+  }
+
   /// 创建复习会话
   Future<void> createReviewSession({int? limit}) async {
     _ensureInitialized();
     await _studyManager!.createReviewSession(limit: limit);
+  }
+
+  /// 创建收藏夹复习会话
+  Future<void> createFavoriteReviewSession({int? limit}) async {
+    _ensureInitialized();
+    await _studyManager!.createFavoriteReviewSession(limit: limit);
+  }
+
+  /// 创建收藏夹学习会话（学习收藏夹里的所有卡，不区分状态）
+  /// 进度计入总进度（endSession 会累加 learnedCards.length）
+  Future<void> createFavoriteLearnSession({int? limit}) async {
+    _ensureInitialized();
+    await _studyManager!.createFavoriteLearnSession(limit: limit);
   }
 
   /// 撤销
@@ -674,8 +734,10 @@ class BackendManager {
   Future<bool> toggleFavorite(String uuid) async {
     _ensureInitialized();
     final card = await queryCardByUuid(_hotDb!, uuid);
+    print('[Provider] toggleFavorite uuid=$uuid card=${card?.conceptUuid ?? 'NULL'}');
     if (card == null) return false;
     final newVal = card.favorite == 1 ? 0 : 1;
+    print('[Provider] toggleFavorite newVal=$newVal');
     await updateCardFavorite(_hotDb!, uuid, newVal);
     return newVal == 1;
   }
@@ -877,6 +939,7 @@ class BackendManager {
 
       return TopicReadingPageData(
         articleId: display.articleId,
+        topicId: display.topicId,
         topicName: display.topicName,
         wordCountText: display.wordCountText,
         readCountText: display.readCountText,
@@ -916,6 +979,12 @@ class BackendManager {
     return _topicManager!.getTopicArticlesWithIndex(topicId, currentArticleId);
   }
 
+  /// 根据专题和索引获取文章ID（0-based index）
+  Future<String?> getArticleIdByIndex(String topicId, int index) async {
+    _ensureInitialized();
+    return _topicManager!.getArticleIdByIndex(topicId, index);
+  }
+
   // -------------------------------------------------------------------------
   // ResultPage 数据
   // -------------------------------------------------------------------------
@@ -931,16 +1000,20 @@ class BackendManager {
 
   Future<List<FavoriteItemData>> loadFavorites() async {
     _ensureInitialized();
+
     final cards = await queryFavoriteCards(_hotDb!);
     final items = <FavoriteItemData>[];
     for (final card in cards) {
       final note = await queryNoteByUuid(_romDb!, card.conceptUuid);
-      if (note == null) continue;
+      if (note == null) {
+        continue;
+      }
       items.add(FavoriteItemData(
         conceptUuid: card.conceptUuid,
         spelling: note.spelling,
         phonetic: note.phonetic,
         definition: note.definition,
+        isLearned: card.favoriteLearned == 1,
       ));
     }
     return items;
@@ -954,7 +1027,7 @@ class BackendManager {
     _ensureInitialized();
     return SettingsData(
       userName: await querySetting(_hotDb!, 'user_name') ?? '',
-      currentBook: await querySetting(_hotDb!, 'current_book') ?? 'cet6',
+      currentBook: await querySetting(_hotDb!, 'current_book') ?? 'cet4',
       singleSessionLimit: int.tryParse(await querySetting(_hotDb!, 'single_session_limit') ?? '70') ?? 70,
       showEtymology: (await querySetting(_hotDb!, 'show_etymology') ?? '1') == '1',
       showDefinition: (await querySetting(_hotDb!, 'show_definition') ?? '1') == '1',
@@ -966,6 +1039,7 @@ class BackendManager {
   Future<void> updateSetting(String key, String value) async {
     _ensureInitialized();
     await setSetting(_hotDb!, key, value);
+    notifyListeners();
   }
 
   // -------------------------------------------------------------------------
@@ -1000,16 +1074,23 @@ class BackendManager {
   Future<ReportsPageData> loadReportsData() async {
     _ensureInitialized();
 
+    final now = DateTime.now().millisecondsSinceEpoch;
     final totalStudyTimeMs = int.tryParse(await querySetting(_hotDb!, 'total_study_time_ms') ?? '0') ?? 0;
     final totalStudyCount = int.tryParse(await querySetting(_hotDb!, 'total_study_count') ?? '0') ?? 0;
     final totalDays = int.tryParse(await querySetting(_hotDb!, 'total_study_days') ?? '0') ?? 0;
     final userName = await querySetting(_hotDb!, 'user_name') ?? '';
-    final currentBook = await querySetting(_hotDb!, 'current_book') ?? 'cet6';
-    final bookProgressCurrent = int.tryParse(await querySetting(_hotDb!, 'book_progress_current') ?? '0') ?? 0;
-    final bookProgressTotal = int.tryParse(await querySetting(_hotDb!, 'book_progress_total') ?? '5000') ?? 5000;
+    final currentBook = await querySetting(_hotDb!, 'current_book') ?? 'cet4';
+    final bookProgress = await queryBookProgress(_hotDb!, currentBook);
+    final bookProgressCurrent = bookProgress?.current ?? 0;
+    final bookProgressTotal = bookProgress?.total ?? 0;
+    final allBookProgress = await queryAllBookProgress(_hotDb!);
+    final dbStats = await queryNoteStats(_romDb!);
 
-    final monthlyStats = await queryMonthlyStats(_hotDb!, 6);
-    final yearlyStats = await queryYearlyStats(_hotDb!, 3);
+    final totalReviewCount = await queryTotalReviewCount(_hotDb!);
+    final ratingDist = await queryTotalRatingDistribution(_hotDb!);
+    final matureCount = await queryMatureCardCount(_hotDb!);
+    final forgottenMatureCount = await queryMatureForgottenCount(_hotDb!);
+    final backlogCount = await queryHistoricalBacklogCount(_hotDb!, now);
 
     return ReportsPageData(
       userName: userName,
@@ -1019,8 +1100,13 @@ class BackendManager {
       currentBook: currentBook,
       bookProgressCurrent: bookProgressCurrent,
       bookProgressTotal: bookProgressTotal,
-      monthlyStats: monthlyStats,
-      yearlyStats: yearlyStats,
+      totalReviewCount: totalReviewCount,
+      ratingDist: ratingDist,
+      matureCount: matureCount,
+      forgottenMatureCount: forgottenMatureCount,
+      backlogCount: backlogCount,
+      allBookProgress: allBookProgress,
+      dbStats: dbStats,
     );
   }
 
@@ -1097,6 +1183,8 @@ class HomePageData {
   final int newCount;
   final int daysSinceExport;
   final bool exportWarning;
+  final String currentBook;
+  final String? bookDisplayName;
 
   HomePageData({
     required this.userName,
@@ -1112,6 +1200,8 @@ class HomePageData {
     required this.newCount,
     required this.daysSinceExport,
     required this.exportWarning,
+    required this.currentBook,
+    this.bookDisplayName,
   });
 
   String _formatDuration(int ms) {
@@ -1127,11 +1217,30 @@ class HomePageData {
   String get todayLearnedText => '今日已学${todayLearnedCount}词，${_formatDuration(todayStudyTimeMs)}';
   String get exportWarningText => '已${daysSinceExport}天未备份';
   String get remainingText => '剩余：$remaining';
-  String get bookProgressText => '当前词书：$bookProgressCurrent/$bookProgressTotal';
+  String get bookProgressText {
+    final label = bookDisplayName ?? _bookLabel(currentBook);
+    return '$label：$bookProgressCurrent/$bookProgressTotal';
+  }
   String get totalStudyCountText => '累计学习$totalStudyCount次';
   String get totalDaysText => '累计${totalDays}天';
   String get dueCountText => '待复习$dueCount词';
   String get newCountText => '新词$newCount个';
+
+  static String _bookLabel(String book) {
+    switch (book) {
+      case 'zk': return '中考';
+      case 'gk': return '高考';
+      case 'cet4': return 'CET4';
+      case 'cet6': return 'CET6';
+      case 'ky': return '考研';
+      case 'kaoyan': return '考研';
+      case 'kaoyan2027': return '2027考研';
+      case 'toefl': return 'TOEFL';
+      case 'ielts': return 'IELTS';
+      case 'gre': return 'GRE';
+      default: return book;
+    }
+  }
 }
 
 class RandomLearnPageData {
@@ -1375,6 +1484,7 @@ class TopicItemData {
 
 class TopicReadingPageData {
   final String articleId;
+  final String topicId;
   final String topicName;
   final String wordCountText;
   final String readCountText;
@@ -1382,6 +1492,7 @@ class TopicReadingPageData {
 
   TopicReadingPageData({
     required this.articleId,
+    required this.topicId,
     required this.topicName,
     required this.wordCountText,
     required this.readCountText,
@@ -1406,12 +1517,14 @@ class FavoriteItemData {
   final String spelling;
   final String phonetic;
   final String definition;
+  final bool isLearned;
 
   FavoriteItemData({
     required this.conceptUuid,
     required this.spelling,
     required this.phonetic,
     required this.definition,
+    required this.isLearned,
   });
 
   String get phoneticText => '/$phonetic /';
@@ -1448,8 +1561,13 @@ class ReportsPageData {
   final String currentBook;
   final int bookProgressCurrent;
   final int bookProgressTotal;
-  final List<MonthlyStat> monthlyStats;
-  final Map<int, MonthlyStat> yearlyStats;
+  final int totalReviewCount;
+  final Map<int, int> ratingDist;
+  final int matureCount;
+  final int forgottenMatureCount;
+  final int backlogCount;
+  final List<BookProgressModel> allBookProgress;
+  final Map<String, int> dbStats;
 
   ReportsPageData({
     required this.userName,
@@ -1459,8 +1577,13 @@ class ReportsPageData {
     required this.currentBook,
     required this.bookProgressCurrent,
     required this.bookProgressTotal,
-    required this.monthlyStats,
-    required this.yearlyStats,
+    required this.totalReviewCount,
+    required this.ratingDist,
+    required this.matureCount,
+    required this.forgottenMatureCount,
+    required this.backlogCount,
+    required this.allBookProgress,
+    required this.dbStats,
   });
 
   String get userNameText => userName.isEmpty ? 'Hi,' : 'Hi,$userName';
@@ -1474,30 +1597,69 @@ class ReportsPageData {
 
   String get totalStudyCountText => '累计学习：${totalStudyCount}词';
   String get totalDaysText => '共学习：${totalDays}天';
-  String get bookProgressText => '已学词书：${_bookLabel(currentBook)}，$bookProgressCurrent/$bookProgressTotal';
-
-  /// 月度总结文字（例如 "2024-03: 120词/80%良"）
-  String get monthlySummaryText {
-    if (monthlyStats.isEmpty) return '';
-    final latest = monthlyStats.last;
-    final rate = (latest.goodRate * 100).toStringAsFixed(0);
-    return '${latest.yearMonth}: ${latest.reviewCount}词/$rate%良';
+  String get bookProgressText {
+    final books = allBookProgress;
+    if (books.isEmpty) return '--';
+    final total = dbStats['total'] ?? 0;
+    return books.map((b) => '${_bookLabel(b.bookId)} ${b.current}/$total').join(' | ');
   }
 
-  /// 年度总结文字（例如 "2024: 3600词"）
-  String get yearlySummaryText {
-    if (yearlyStats.isEmpty) return '';
-    final currentYear = DateTime.now().year;
-    final stat = yearlyStats[currentYear];
-    if (stat == null) return '';
-    return '$currentYear: ${stat.reviewCount}词';
+  int get _again => ratingDist[1] ?? 0;
+  int get _hard => ratingDist[2] ?? 0;
+  int get _good => ratingDist[3] ?? 0;
+  int get _easy => ratingDist[4] ?? 0;
+
+  String get totalReviewCountText => '累计复习：${totalReviewCount}词';
+
+  String get ratingDistributionText {
+    if (totalReviewCount == 0) return 'again:0% | hard:0% | good:0% | easy:0%';
+    final againP = (_again * 100 / totalReviewCount).toStringAsFixed(0);
+    final hardP = (_hard * 100 / totalReviewCount).toStringAsFixed(0);
+    final goodP = (_good * 100 / totalReviewCount).toStringAsFixed(0);
+    final easyP = (_easy * 100 / totalReviewCount).toStringAsFixed(0);
+    return 'again:$againP% | hard:$hardP% | good:$goodP% | easy:$easyP%';
   }
+
+  /// 成熟转化率 = 成熟词汇数 / 累计学习数
+  /// 含义："新词"平均需要经历多少次按键才能转化为"成熟"状态
+  String get matureRateText {
+    if (totalStudyCount == 0) return '成熟转化率：--%';
+    final rate = (matureCount * 100 / totalStudyCount).toStringAsFixed(1);
+    return '成熟转化率：$rate%';
+  }
+
+  /// 成熟词汇失忆率 = 成熟卡被 Again 的次数 / 成熟卡总数
+  /// 含义：已经进入长期记忆区（间隔 > 21天）的词被遗忘的概率
+  String get forgotRateText {
+    if (matureCount == 0) return '成熟词汇失忆率：--%';
+    final rate = (forgottenMatureCount * 100 / matureCount).toStringAsFixed(1);
+    return '成熟词汇失忆率：$rate%';
+  }
+
+  /// 认知吞吐量 = 累计复习次数 / 学习时长（分钟）
+  /// 含义：每分钟处理的词条数
+  String get throughputText {
+    final minutes = totalStudyTimeMs / 60000;
+    if (minutes <= 0) return '认知吞吐量：--词/min';
+    final t = totalReviewCount / minutes;
+    return '认知吞吐量：${t.toStringAsFixed(1)}词/min';
+  }
+
+  /// 历史积压复习量：超过理想复习时间但仍未复习的词汇绝对数量
+  String get backlogText => '历史积压复习量：${backlogCount}词';
 
   String _bookLabel(String book) {
     switch (book) {
-      case 'kaoyan2027': return '2027考研';
-      case 'cet6': return 'CET6';
+      case 'zk': return '中考';
+      case 'gk': return '高考';
       case 'cet4': return 'CET4';
+      case 'cet6': return 'CET6';
+      case 'ky': return '考研';
+      case 'kaoyan': return '考研';
+      case 'kaoyan2027': return '2027考研';
+      case 'toefl': return 'TOEFL';
+      case 'ielts': return 'IELTS';
+      case 'gre': return 'GRE';
       default: return book;
     }
   }

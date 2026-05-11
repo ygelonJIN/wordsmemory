@@ -1,16 +1,18 @@
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:demo1red/backend/provider.dart';
 import 'package:demo1red/backend/tts_service.dart';
 
 class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
+  bool _disposed = false;
+
   RandomLearnPageData? cardData;
   bool isLoading = true;
   bool isFavorite = false;
   bool hasError = false;
   String? errorMessage;
-  bool _disposed = false;
 
   // 学习辅助显示开关
   bool showEtymology = true;
@@ -78,6 +80,28 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
       await BackendManager.instance.confirmPendingRating(pendingRating);
       print('[Learn] confirmPendingRating 完成');
 
+      // 从收藏夹点词进来的单卡会话：学完后返回收藏夹页面
+      if (session != null && session.resumeArticleId == 'favorite') {
+        final uuid = session.currentCard?.conceptUuid;
+        if (uuid != null) {
+          await BackendManager.instance.markTopicWordRead(uuid);
+        }
+        print('[Learn] 回流到收藏夹');
+        ctx.go('/favoritePage');
+        return;
+      }
+
+      // 从快速筛选点词进来的单卡会话：学完后返回快速筛选页面
+      if (session != null && session.resumeArticleId == 'quick_learn') {
+        final uuid = session.currentCard?.conceptUuid;
+        if (uuid != null) {
+          await BackendManager.instance.markTopicWordRead(uuid);
+        }
+        print('[Learn] 回流到快速筛选');
+        ctx.go('/quickLearnPage');
+        return;
+      }
+
       // 从语义阅读页点词进来的单卡会话：学完后返回同一篇文章
       if (session != null && session.canResumeTopicReading) {
         // 标记该词已在专题阅读中学过，下次进入文章时 readCount 会包含此卡
@@ -90,7 +114,7 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
         final articleId = session.resumeArticleId ?? 'art_tech_read_01';
         final topicId = session.resumeTopicId ?? 'topic_tech_read';
         print('[Learn] 回流到阅读页 articleId=$articleId');
-        ctx.push('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
+        GoRouter.of(ctx).go('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
         return;
       }
 

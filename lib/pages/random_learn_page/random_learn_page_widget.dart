@@ -36,6 +36,18 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
     super.dispose();
   }
 
+  double _wordFontSize(String word) {
+    final len = word.length;
+    if (len <= 4) return 86.0;
+    if (len <= 6) return 72.0;
+    if (len <= 8) return 62.0;
+    if (len <= 10) return 50.0;
+    if (len <= 12) return 46.0;
+    if (len <= 14) return 42.0;
+    if (len <= 16) return 36.0;
+    return 26.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     _model.setOnUpdate(
@@ -141,7 +153,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     color: Colors.redAccent,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
@@ -149,7 +161,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                   ),
                                   fontSize: 14.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -186,14 +198,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                         _model.cardData?.nextReviewDisplayText ?? '下次复习时间：0天后',
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
                               font: GoogleFonts.inter(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w400,
                                 fontStyle: FlutterFlowTheme.of(context)
                                     .bodyMedium
                                     .fontStyle,
                               ),
                               fontSize: 16.0,
                               letterSpacing: 0.0,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               fontStyle: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .fontStyle,
@@ -205,7 +217,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                     alignment: AlignmentDirectional(-1.0, 0.0),
                     child: Padding(
                       padding:
-                          EdgeInsetsDirectional.fromSTEB(12.0, 5.0, 12.0, 0.0),
+                          EdgeInsetsDirectional.fromSTEB(12.0, 15.0, 12.0, 10.0),
                       child: Text(
                         _model.cardData?.spelling ?? '',
                         softWrap: true,
@@ -219,7 +231,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                     .fontStyle,
                               ),
                               color: Colors.black,
-                              fontSize: 64.0,
+                              fontSize: _wordFontSize(_model.cardData?.spelling ?? ''),
                               letterSpacing: 0.0,
                               fontWeight: FontWeight.w800,
                               fontStyle: FlutterFlowTheme.of(context)
@@ -245,14 +257,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -265,14 +277,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -297,14 +309,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -317,14 +329,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -349,14 +361,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -369,14 +381,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -401,14 +413,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -421,14 +433,14 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 .bodyMedium
                                 .override(
                                   font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   fontSize: 15.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -526,7 +538,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                             shrinkWrap: true,
                             scrollDirection: Axis.vertical,
                             children: [
-                              if (_model.showEtymology && (_model.cardData?.etymology.isNotEmpty ?? false)) ...[
+                              if (_model.showEtymology && (_model.cardData?.etymology.isNotEmpty ?? false) && _model.cardData!.etymologySpans.toPlainText().trim().isNotEmpty) ...[
                                 Align(
                                   alignment: AlignmentDirectional(-1.0, 0.0),
                                   child: Padding(
