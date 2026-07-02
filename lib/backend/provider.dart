@@ -956,6 +956,11 @@ class BackendManager extends ChangeNotifier {
     }
   }
 
+  Future<bool> checkConceptExists(String conceptUuid) async {
+    _ensureInitialized();
+    return _topicManager!.conceptExists(conceptUuid);
+  }
+
   Future<void> visitTopicWord(String conceptUuid) async {
     _ensureInitialized();
     await _topicManager!.visitWord(conceptUuid);

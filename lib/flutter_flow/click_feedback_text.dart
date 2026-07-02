@@ -64,8 +64,8 @@ class _ClickFeedbackTextState extends State<ClickFeedbackText>
         animation: _animation,
         builder: (context, child) {
           final fontWeight = FontWeight.lerp(
-            widget.feedbackStyle.fontWeight ?? FontWeight.w700,
-            widget.normalStyle.fontWeight ?? FontWeight.w500,
+            widget.feedbackStyle.fontWeight ?? FontWeight.w600,
+            widget.normalStyle.fontWeight ?? FontWeight.w600,
             _animation.value,
           );
           final color = Color.lerp(

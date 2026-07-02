@@ -127,6 +127,12 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
     if (ctx == null) return;
     try {
       print('[TopicReading1] onWordTap uuid=$uuid');
+      // 验证 uuid 是否为有效概念词
+      final conceptExists = await BackendManager.instance.checkConceptExists(uuid);
+      if (!conceptExists) {
+        print('[TopicReading1] uuid $uuid 不在词库中，取消跳转');
+        return;
+      }
       await BackendManager.instance.visitTopicWord(uuid);
       print('[TopicReading1] visitTopicWord 完成');
       final articleId = pageData?.articleId ?? widget?.articleId ?? 'art_tech_read_01';

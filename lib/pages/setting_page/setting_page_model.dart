@@ -184,7 +184,7 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
     try {
       final json = await BackendManager.instance.exportData();
 
-      final result = await FilePicker.platform.saveFile(
+      final result = await FilePicker.saveFile(
         dialogTitle: '备份存档',
         fileName: 'wordmemory_backup_${DateTime.now().millisecondsSinceEpoch}.json',
         type: FileType.custom,
@@ -213,7 +213,7 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
   Future<SettingPageActionResponse> importArchive() async {
     updatePage(() => isImporting = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         dialogTitle: '导入存档',
         type: FileType.custom,
         allowedExtensions: ['json'],

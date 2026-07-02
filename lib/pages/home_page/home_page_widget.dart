@@ -65,30 +65,29 @@ class _HomePageWidgetState extends State<HomePageWidget> {
           key: scaffoldKey,
           resizeToAvoidBottomInset: false,
           backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-          body: SafeArea(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Container(
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  child: custom_widgets.AdvancedRayBackground(
                     width: double.infinity,
                     height: double.infinity,
-                    child: custom_widgets.AdvancedRayBackground(
-                      width: double.infinity,
-                      height: double.infinity,
-                      totalRays: 28,
-                      lineColor: FlutterFlowTheme.of(context).primary,
-                      thicknessPx: 3.0,
-                      shapeType: 'Point',
-                      shapeWidthPx: 0.0,
-                      shapeHeightPx: 0.0,
-                      innerFadeLengthPx: 320.0,
-                      inflectionDistPercent: 0.0,
-                      inflectionOpacityPercent: 0.0,
-                      outerFadeLengthPx: 0.0,
-                    ),
+                    totalRays: 28,
+                    lineColor: FlutterFlowTheme.of(context).primary,
+                    thicknessPx: 3.0,
+                    shapeType: 'Point',
+                    shapeWidthPx: 0.0,
+                    shapeHeightPx: 0.0,
+                    innerFadeLengthPx: 320.0,
+                    inflectionDistPercent: 0.0,
+                    inflectionOpacityPercent: 0.0,
+                    outerFadeLengthPx: 0.0,
                   ),
                 ),
-                Positioned(
+              ),
+              Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
@@ -108,12 +107,15 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     ),
                   ),
                 ),
-                Positioned.fill(
+                SafeArea(
+                child: Transform.translate(
+                  offset: const Offset(0, -20),
                   child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
                     child: Column(
                       children: [
                         Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 0.0),
+                          padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
                           child: Column(
                             mainAxisSize: MainAxisSize.max,
                             children: [
@@ -121,19 +123,21 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 alignment: AlignmentDirectional(1.0, 0.0),
                                 child: Padding(
                                   padding: EdgeInsetsDirectional.fromSTEB(20.0, 30.0, 20.0, 0.0),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                                    textBaseline: TextBaseline.alphabetic,
-                                    children: [
-                                      HiGreeting(
+                                  child: SizedBox(
+                                    height: 120.0,
+                                    child: Align(
+                                      alignment: AlignmentDirectional(1.0, 1.0),
+                                      child: Padding(
+                                        padding: EdgeInsetsDirectional.only(bottom: 10.0),
+                                        child: HiGreeting(
                                         name: _model.userName,
                                         onSave: (name) => _model.saveUserName(name),
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
+                                    ),
                             ],
                           ),
                         ),
@@ -144,11 +148,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             child: Text(
                               _model.todayLearned,
                               style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                font: GoogleFonts.notoSans(
+                                font: GoogleFonts.inter(
                                   fontWeight: FontWeight.w600,
                                 ),
                                 color: Colors.black,
-                                fontSize: 30.0,
+                                fontSize: 26.0,
                                 letterSpacing: 0.0,
                                 fontWeight: FontWeight.w600,
                                 fontStyle: FlutterFlowTheme.of(context)
@@ -170,11 +174,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 Text(
                                   '每日目标',
                                   style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.notoSans(
+                                    font: GoogleFonts.inter(
                                       fontWeight: FontWeight.w600,
                                     ),
                                     color: Colors.black,
-                                    fontSize: 30.0,
+                                    fontSize: 26.0,
                                     letterSpacing: 0.0,
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
@@ -189,11 +193,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 Text(
                                   '词',
                                   style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                    font: GoogleFonts.notoSans(
+                                    font: GoogleFonts.inter(
                                       fontWeight: FontWeight.w600,
                                     ),
                                     color: Colors.black,
-                                    fontSize: 30.0,
+                                    fontSize: 26.0,
                                     letterSpacing: 0.0,
                                     fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
@@ -213,13 +217,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               _model.exportWarning,
                               style: FlutterFlowTheme.of(context).displayLarge.override(
                                 font: GoogleFonts.inter(
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                 ),
                                 color: const Color(0xFF454545),
-                                fontSize: 12.0,
+                                fontSize: 13.0,
                                 letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.w600,
                                 fontStyle: FontStyle.italic,
                                 lineHeight: 1.5,
                               ),
@@ -242,16 +246,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 '设置',
                                 textAlign: TextAlign.start,
                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.normal,
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   color: Colors.black,
-                                  fontSize: 28.0,
+                                  fontSize: 24.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -278,16 +282,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 '收藏夹',
                                 textAlign: TextAlign.start,
                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.normal,
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   color: Colors.black,
-                                  fontSize: 28.0,
+                                  fontSize: 24.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -314,16 +318,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 '数据统计',
                                 textAlign: TextAlign.start,
                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.normal,
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   color: Colors.black,
-                                  fontSize: 28.0,
+                                  fontSize: 24.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -342,13 +346,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               'stability,稳定性,大概能稳定记住多久',
                               style: FlutterFlowTheme.of(context).displayLarge.override(
                                 font: GoogleFonts.inter(
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                 ),
                                 color: const Color(0xFF454545),
                                 fontSize: 12.0,
                                 letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.w600,
                                 fontStyle: FontStyle.italic,
                                 lineHeight: 1.5,
                               ),
@@ -363,13 +367,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               'retrievability,可提取性,目前回答正确的把握',
                               style: FlutterFlowTheme.of(context).displayLarge.override(
                                 font: GoogleFonts.inter(
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                 ),
                                 color: const Color(0xFF454545),
                                 fontSize: 12.0,
                                 letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.w600,
                                 fontStyle: FontStyle.italic,
                                 lineHeight: 1.5,
                               ),
@@ -384,13 +388,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               'collinsStar,柯林斯星级',
                               style: FlutterFlowTheme.of(context).displayLarge.override(
                                 font: GoogleFonts.inter(
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                 ),
                                 color: const Color(0xFF454545),
                                 fontSize: 12.0,
                                 letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.w600,
                                 fontStyle: FontStyle.italic,
                                 lineHeight: 1.5,
                               ),
@@ -405,13 +409,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               'bnc,英国国家语料库词频顺序',
                               style: FlutterFlowTheme.of(context).displayLarge.override(
                                 font: GoogleFonts.inter(
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                 ),
                                 color: const Color(0xFF454545),
                                 fontSize: 12.0,
                                 letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.w600,
                                 fontStyle: FontStyle.italic,
                                 lineHeight: 1.5,
                               ),
@@ -426,13 +430,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               'frq,当代语料库词频顺序',
                               style: FlutterFlowTheme.of(context).displayLarge.override(
                                 font: GoogleFonts.inter(
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                 ),
                                 color: const Color(0xFF454545),
                                 fontSize: 12.0,
                                 letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.w600,
                                 fontStyle: FontStyle.italic,
                                 lineHeight: 1.5,
                               ),
@@ -455,16 +459,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 '结构树学习',
                                 textAlign: TextAlign.start,
                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.normal,
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   color: Colors.black,
-                                  fontSize: 28.0,
+                                  fontSize: 24.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -491,16 +495,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 '语义阅读',
                                 textAlign: TextAlign.start,
                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.normal,
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   color: Colors.black,
-                                  fontSize: 28.0,
+                                  fontSize: 24.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -527,16 +531,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 '快速筛选',
                                 textAlign: TextAlign.start,
                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.notoSans(
-                                    fontWeight: FontWeight.normal,
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
                                     fontStyle: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontStyle,
                                   ),
                                   color: Colors.black,
-                                  fontSize: 28.0,
+                                  fontSize: 24.0,
                                   letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                  fontWeight: FontWeight.w600,
                                   fontStyle: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .fontStyle,
@@ -560,31 +564,31 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                       .displayLarge
                                       .override(
                                         font: GoogleFonts.inter(
-                                          fontWeight: FontWeight.normal,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                         color: const Color(0xFF454545),
-                                        fontSize: 12.0,
+                                        fontSize: 13.0,
                                         letterSpacing: 0.0,
-                                        fontWeight: FontWeight.normal,
+                                        fontWeight: FontWeight.w600,
                                         lineHeight: 1.5,
                                       ),
                                 ),
                               ),
                               Spacer(),
                               Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 70.0, 0.0),
+                                padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 50.0, 0.0),
                                 child: Text(
                                   _model.bookProgress,
                                   style: FlutterFlowTheme.of(context)
                                       .displayLarge
                                       .override(
                                         font: GoogleFonts.inter(
-                                          fontWeight: FontWeight.normal,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                         color: const Color(0xFF454545),
-                                        fontSize: 12.0,
+                                        fontSize: 13.0,
                                         letterSpacing: 0.0,
-                                        fontWeight: FontWeight.normal,
+                                        fontWeight: FontWeight.w600,
                                         lineHeight: 1.5,
                                       ),
                                 ),
@@ -619,14 +623,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         style: FlutterFlowTheme.of(context)
                                             .bodyMedium
                                             .override(
-                                              font: GoogleFonts.notoSans(
+                                              font: GoogleFonts.inter(
                                                 fontWeight: FontWeight.w600,
                                                 fontStyle: FlutterFlowTheme.of(context)
                                                     .bodyMedium
                                                     .fontStyle,
                                               ),
                                               color: Colors.black,
-                                              fontSize: 45.0,
+                                              fontSize: 42.0,
                                               letterSpacing: 0.0,
                                               fontWeight: FontWeight.w600,
                                               fontStyle: FlutterFlowTheme.of(context)
@@ -670,14 +674,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         style: FlutterFlowTheme.of(context)
                                             .bodyMedium
                                             .override(
-                                              font: GoogleFonts.notoSans(
+                                              font: GoogleFonts.inter(
                                                 fontWeight: FontWeight.w600,
                                                 fontStyle: FlutterFlowTheme.of(context)
                                                     .bodyMedium
                                                     .fontStyle,
                                               ),
                                               color: Colors.black,
-                                              fontSize: 45.0,
+                                              fontSize: 42.0,
                                               letterSpacing: 0.0,
                                               fontWeight: FontWeight.w600,
                                               fontStyle: FlutterFlowTheme.of(context)
@@ -698,8 +702,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     ),
                   ),
                 ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),

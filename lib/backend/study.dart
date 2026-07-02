@@ -855,7 +855,7 @@ class TopicReadingManager {
     final topicModel = TopicModel.fromMap(topic.first);
     print('[TopicReadingManager] contentJson 长度=${article.contentJson.length} 前100字符=${article.contentJson.length > 100 ? article.contentJson.substring(0, 100) : article.contentJson}');
     final readCount = await _countTopicReadUuids(article.contentJson);
-    final segments = _parseContentJson(article.contentJson);
+    final segments = await _parseContentJson(article.contentJson);
 
     print('[TopicReadingManager] 返回 ArticleDisplayModel articleId=${article.articleId} readCount=$readCount');
     return ArticleDisplayModel(
@@ -870,7 +870,7 @@ class TopicReadingManager {
 
   Future<int> _countTopicReadUuids(String contentJson) async {
     try {
-      final segments = _parseContentJson(contentJson);
+      final segments = await _parseContentJson(contentJson);
       print('[TopicReading] _countTopicReadUuids: 共 ${segments.length} 个 segments');
       for (final seg in segments) {
         final t = seg['t']?.toString() ?? '';
@@ -894,20 +894,20 @@ class TopicReadingManager {
     }
   }
 
-  List<Map<String, dynamic>> _parseContentJson(String json) {
+  Future<List<Map<String, dynamic>>> _parseContentJson(String json) async {
     try {
       final decoded = _jsonDecode(json);
+      List<Map<String, dynamic>> result;
       if (decoded is List) {
-        return decoded.map((e) {
+        result = decoded.map((e) {
           if (e is Map) return Map<String, dynamic>.from(e);
           return <String, dynamic>{};
         }).toList();
-      }
-      if (decoded is Map) {
+      } else if (decoded is Map) {
         // 显式 segments 格式（用于语义阅读词级高亮）
         final segments = decoded['segments'];
         if (segments is List && segments.isNotEmpty) {
-          final result = <Map<String, dynamic>>[];
+          result = <Map<String, dynamic>>[];
           for (final seg in segments) {
             if (seg is Map) {
               result.add({
@@ -917,37 +917,69 @@ class TopicReadingManager {
               });
             }
           }
-          return result;
-        }
-        // dict 格式（如 art_suf_01）：提取 sections 转为 segments
-        final sections = decoded['sections'];
-        if (sections is List) {
-          final result = <Map<String, dynamic>>[];
-          for (final section in sections) {
-            if (section is Map) {
-              final heading = section['heading'] as String? ?? '';
-              final body = section['body'] as String? ?? '';
-              if (heading.isNotEmpty) {
-                result.add({'t': heading, 'c': 0});
-              }
-              if (body.isNotEmpty) {
-                result.add({'t': body, 'c': 0});
+        } else {
+          // dict 格式（如 art_suf_01）：提取 sections 转为 segments
+          final sections = decoded['sections'];
+          if (sections is List) {
+            result = <Map<String, dynamic>>[];
+            for (final section in sections) {
+              if (section is Map) {
+                final heading = section['heading'] as String? ?? '';
+                final body = section['body'] as String? ?? '';
+                if (heading.isNotEmpty) {
+                  result.add({'t': heading, 'c': 0});
+                }
+                if (body.isNotEmpty) {
+                  result.add({'t': body, 'c': 0});
+                }
               }
             }
+          } else {
+            final title = decoded['title'] as String?;
+            if (title != null && title.isNotEmpty) {
+              result = [{'t': title, 'c': 0}];
+            } else {
+              result = [];
+            }
           }
-          return result;
         }
-        final title = decoded['title'] as String?;
-        if (title != null && title.isNotEmpty) {
-          return [{'t': title, 'c': 0}];
+      } else {
+        result = [];
+      }
+      // 批量校验高亮词 UUID 有效性，失效词降级为普通文本(c=0)
+      final highlightUuids = result
+          .where((seg) => seg['c'] == 1 && (seg['u'] as String).isNotEmpty)
+          .map((seg) => seg['u'] as String)
+          .toList();
+      if (highlightUuids.isNotEmpty) {
+        final placeholders = highlightUuids.map((_) => '?').join(',');
+        final rows = await romDb.query(
+          'Note',
+          columns: ['Concept_UUID'],
+          where: 'Concept_UUID IN ($placeholders)',
+          whereArgs: highlightUuids,
+        );
+        final validUuids = rows.map((r) => r['Concept_UUID'] as String).toSet();
+        for (final seg in result) {
+          if (seg['c'] == 1 && (seg['u'] as String).isNotEmpty) {
+            if (!validUuids.contains(seg['u'])) {
+              seg['c'] = 0;
+            }
+          }
         }
       }
-      return [];
+      return result;
     } catch (e) {
       // JSON 解析失败时返回空列表，便于调试时可开启日志
       // print('[Study] _parseContentJson 解析失败: $e');
       return [];
     }
+  }
+
+
+  Future<bool> conceptExists(String conceptUuid) async {
+    final rows = await romDb.query('Note', columns: ['Concept_UUID'], where: 'Concept_UUID = ?', whereArgs: [conceptUuid], limit: 1);
+    return rows.isNotEmpty;
   }
 
   Future<void> visitWord(String conceptUuid) async {

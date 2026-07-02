@@ -1,0 +1,12 @@
+# FVM Version Cache
+.fvm/
+
+# Flutter build
+.dart_tool/
+build/
+
+# macOS
+.DS_Store
+
+# iOS pods (using LocalPods instead)
+Pods/
