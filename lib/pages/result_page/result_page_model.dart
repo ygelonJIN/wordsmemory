@@ -50,117 +50,38 @@ class ResultPageModel extends FlutterFlowModel<ResultPageWidget> {
     try {
       final userNameSetting = await BackendManager.instance.loadSettings();
       final homeData = await BackendManager.instance.loadHomePageData();
+      // 兜底结算（幂等安全：endSession 已内置 finalized 保护）
+      final stats = await BackendManager.instance.endSession();
 
-      if (!_disposed) {
-        updatePage(() {
-          savingStatus = '已保存';
-          userName = userNameSetting.userNameText;
-        });
+      if (_disposed) return;
 
-        if (fromQuickLearn == true) {
-          // 快速筛选完成模式：调用 endSession 更新词书进度
-          final stats = await BackendManager.instance.endSession();
-          if (_disposed) return;
-          final spellings = await BackendManager.instance.getQuickMarkedSpellings();
-          if (_disposed) return;
-          updatePage(() {
-            dailySummary = '本次已标注${spellings.length}词';
-            learnedWords = spellings.isNotEmpty ? spellings.join('，') : '（无）';
-            newCount = '新学数量:${stats.newCards}';
-            reviewCount = '复习数量:${stats.reviewCards}';
-            relearnCount = '重学数量:${stats.relearnCards}';
-            againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
-            hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
-            goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
-            easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
-            avgStabilityChange = '平均stability${stats.avgStabilityChange >= 0 ? '+' : ''}${stats.avgStabilityChange.toStringAsFixed(1)}days';
-            avgRetrievabilityChange = '平均retrievability${stats.avgRetrievabilityChange >= 0 ? '+' : ''}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
-          });
-        } else if (fromSemanticReading == true) {
-          // 语义阅读完成模式：调用 endSession 获取学习统计
-          final stats = await BackendManager.instance.endSession();
-          if (_disposed) return;
-          updatePage(() {
-            dailySummary = '每日目标${homeData.dailyTarget}词，已学${homeData.todayLearnedCount}词';
-            // 优先使用导航参数传入的 spellings（内存数据），避免数据库查询问题
-            final spellings = learnedSpellings ?? stats.learnedSpellings;
-            sessionSummary = '本次已学${spellings.length}词';
-            learnedWords = spellings.isNotEmpty ? spellings.join('，') : '（无）';
-            // 填充统计数据
-            newCount = '新学数量:${stats.newCards}';
-            reviewCount = '复习数量:${stats.reviewCards}';
-            relearnCount = '重学数量:${stats.relearnCards}';
-            againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
-            hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
-            goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
-            easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
-            avgStabilityChange = '平均stability${stats.avgStabilityChange >= 0 ? '+' : ''}${stats.avgStabilityChange.toStringAsFixed(1)}days';
-            avgRetrievabilityChange = '平均retrievability${stats.avgRetrievabilityChange >= 0 ? '+' : ''}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
-          });
-        } else if (fromRandomLearn == true) {
-          // 随机学习总结模式
-          final stats = await BackendManager.instance.endSession();
-          if (_disposed) return;
-          updatePage(() {
-            dailySummary = '每日目标${homeData.dailyTarget}词，已学${homeData.todayLearnedCount}词';
-            // 优先使用导航参数传入的 spellings（内存数据）
-            final spellings = learnedSpellings ?? stats.learnedSpellings;
-            sessionSummary = '本次已学${spellings.length}词';
-            learnedWords = spellings.isNotEmpty ? spellings.join('，') : '（无）';
-            // 填充统计数据
-            newCount = '新学数量:${stats.newCards}';
-            reviewCount = '复习数量:${stats.reviewCards}';
-            relearnCount = '重学数量:${stats.relearnCards}';
-            againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
-            hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
-            goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
-            easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
-            avgStabilityChange = '平均stability${stats.avgStabilityChange >= 0 ? '+' : ''}${stats.avgStabilityChange.toStringAsFixed(1)}days';
-            avgRetrievabilityChange = '平均retrievability${stats.avgRetrievabilityChange >= 0 ? '+' : ''}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
-          });
-        } else if (fromTreeLearning == true) {
-          // 结构树学习总结模式
-          final stats = await BackendManager.instance.endSession();
-          if (_disposed) return;
-          updatePage(() {
-            dailySummary = '每日目标${homeData.dailyTarget}词，已学${homeData.todayLearnedCount}词';
-            final spellings = learnedSpellings ?? stats.learnedSpellings;
-            sessionSummary = '本次已学${spellings.length}词';
-            learnedWords = spellings.isNotEmpty ? spellings.join('，') : '（无）';
-            // 填充统计数据
-            newCount = '新学数量:${stats.newCards}';
-            reviewCount = '复习数量:${stats.reviewCards}';
-            relearnCount = '重学数量:${stats.relearnCards}';
-            againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
-            hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
-            goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
-            easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
-            avgStabilityChange = '平均stability${stats.avgStabilityChange >= 0 ? '+' : ''}${stats.avgStabilityChange.toStringAsFixed(1)}days';
-            avgRetrievabilityChange = '平均retrievability${stats.avgRetrievabilityChange >= 0 ? '+' : ''}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
-          });
-        } else {
-          // 每日学习总结模式：调用 endSession 获取本次学习统计
-          final stats = await BackendManager.instance.endSession();
-          final totalMarked = await _queryTotalMarkedCount();
-          if (_disposed) return;
-          updatePage(() {
-            dailySummary = '每日目标${homeData.dailyTarget}词，已学${homeData.todayLearnedCount}词';
-            sessionSummary = '本次已标${totalMarked}词，本课已学${stats.learnedSpellings.length}词';
-            learnedWords = stats.learnedSpellings.isNotEmpty
-                ? stats.learnedSpellings.join('，')
-                : '（无）';
-            // 填充统计数据
-            newCount = '新学数量:${stats.newCards}';
-            reviewCount = '复习数量:${stats.reviewCards}';
-            relearnCount = '重学数量:${stats.relearnCards}';
-            againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
-            hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
-            goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
-            easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
-            avgStabilityChange = '平均stability${stats.avgStabilityChange >= 0 ? '+' : ''}${stats.avgStabilityChange.toStringAsFixed(1)}days';
-            avgRetrievabilityChange = '平均retrievability${stats.avgRetrievabilityChange >= 0 ? '+' : ''}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
-          });
-        }
+      // 用户信息
+      final resolvedUserName = userNameSetting.userNameText.isNotEmpty
+          ? userNameSetting.userNameText
+          : '用户';
+
+      // 按来源构建展示字段
+      final spellings = _resolveSpellings(stats);
+
+      if (fromQuickLearn == true) {
+        final markedSpellings = await BackendManager.instance.getQuickMarkedSpellings();
+        if (_disposed) return;
+        _applyStats(
+          stats, homeData, spellings, resolvedUserName,
+          dailySummaryOverride: '本次已标注${markedSpellings.length}词',
+        );
+      } else {
+        final totalMarked = fromQuickLearn != true && fromSemanticReading != true &&
+            fromRandomLearn != true && fromTreeLearning != true
+            ? await _queryTotalMarkedCount()
+            : null;
+        if (_disposed) return;
+        _applyStats(
+          stats, homeData, spellings, resolvedUserName,
+          sessionSummaryOverride: totalMarked != null
+              ? '本次已标${totalMarked}词，本课已学${stats.learnedSpellings.length}词'
+              : '本次已学${spellings.length}词',
+        );
       }
     } catch (e) {
       if (!_disposed) {
@@ -172,14 +93,48 @@ class ResultPageModel extends FlutterFlowModel<ResultPageWidget> {
     }
   }
 
+  List<String> _resolveSpellings(SessionStats stats) {
+    // 优先使用导航参数传入的 spellings（内存数据），避免数据库查询问题
+    return learnedSpellings ?? stats.learnedSpellings;
+  }
+
+  void _applyStats(
+    SessionStats stats,
+    HomePageData homeData,
+    List<String> spellings,
+    String userNameText, {
+    String? dailySummaryOverride,
+    String? sessionSummaryOverride,
+  }) {
+    updatePage(() {
+      savingStatus = '已保存';
+      userName = userNameText;
+      dailySummary = dailySummaryOverride ??
+          '每日目标${homeData.dailyTarget}词，已学${homeData.todayLearnedCount}词';
+      sessionSummary = sessionSummaryOverride ??
+          '本次已学${spellings.length}词';
+      learnedWords = spellings.isNotEmpty ? spellings.join('，') : '（无）';
+
+      // 统一统计字段填充
+      newCount = '新学数量:${stats.newCards}';
+      reviewCount = '复习数量:${stats.reviewCards}';
+      relearnCount = '重学数量:${stats.relearnCards}';
+      againPercent = 'again:${stats.againPercent.toStringAsFixed(0)}%';
+      hardPercent = 'hard:${stats.hardPercent.toStringAsFixed(0)}%';
+      goodPercent = 'good:${stats.goodPercent.toStringAsFixed(0)}%';
+      easyPercent = 'easy:${stats.easyPercent.toStringAsFixed(0)}%';
+      final stabilitySign = stats.avgStabilityChange >= 0 ? '+' : '';
+      avgStabilityChange = '平均stability${stabilitySign}${stats.avgStabilityChange.toStringAsFixed(1)}days';
+      final retrievSign = stats.avgRetrievabilityChange >= 0 ? '+' : '';
+      avgRetrievabilityChange = '平均retrievability${retrievSign}${stats.avgRetrievabilityChange.toStringAsFixed(0)}%';
+    });
+  }
+
   Future<int> _queryTotalMarkedCount() async {
     try {
-      // 返回所有已标记单词的数量（跨所有日期的累计数，非仅今日）
       final all = await BackendManager.instance.getQuickMarkedSpellings();
       return all.length;
     } catch (e) {
-      // 查询失败时返回 0，便于调试时可开启日志
-      // print('[ResultPage] _queryTotalMarkedCount 异常: $e');
       return 0;
     }
   }

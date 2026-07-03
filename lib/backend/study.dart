@@ -38,6 +38,11 @@ class StudySession {
   /// 是否从收藏夹进入的学习会话（影响 Favorite_Learned 标记）
   bool fromFavorite;
 
+  /// 会话是否已结算（endSession 幂等保护）
+  bool finalized = false;
+  /// 首次结算结果缓存（用于重复调用时返回一致结果）
+  SessionStats? _cachedStats;
+
   StudySession({
     required this.mode,
     required this.queue,
@@ -69,6 +74,24 @@ class StudySession {
   bool get canResumeTopicReading => topicReadingResumeArticleId != null;
   String? get resumeArticleId => topicReadingResumeArticleId;
   String? get resumeTopicId => topicReadingResumeTopicId;
+
+  // ── 回流来源判定（收束所有字符串哨兵到这里）──
+
+  bool get isFavoriteSource =>
+      topicReadingResumeArticleId == 'favorite';
+
+  bool get isQuickLearnSource =>
+      topicReadingResumeArticleId == 'quick_learn';
+
+  bool get isTopicReadingSource =>
+      canResumeTopicReading && !isFavoriteSource && !isQuickLearnSource;
+
+  bool get isTreeSource =>
+      treeResumeRootId != null;
+
+  /// 是否为单卡注入会话（需要回流原页面，不走 ResultPage 收口）
+  bool get isSingleCardSource =>
+      isFavoriteSource || isQuickLearnSource || isTopicReadingSource || isTreeSource;
 
   void advance() {
     if (hasNext) currentIndex++;
@@ -309,6 +332,17 @@ class StudySessionManager {
     }
 
     final session = _currentSession!;
+
+    // 幂等保护：已结算则返回缓存结果
+    if (session.finalized) {
+      print('[Study] endSession: 已结算，返回缓存');
+      return session._cachedStats ?? SessionStats(
+        totalCards: 0, newCards: 0, reviewCards: 0, relearnCards: 0,
+        ratingDistribution: {}, avgStabilityChange: 0,
+        avgRetrievabilityChange: 0, learnedSpellings: [],
+      );
+    }
+
     final endTime = DateTime.now().millisecondsSinceEpoch;
 
     final stats = await calculateSessionStats(
@@ -318,6 +352,7 @@ class StudySessionManager {
       sessionEndTime: endTime,
     );
 
+    // Session 级统计（时长/天数），per-card 统计由 confirmPendingRating 负责
     final duration = endTime - session.sessionStartTime;
     final totalTime = await querySettingInt(hotDb, 'total_study_time_ms') ?? 0;
     await setSettingInt(hotDb, 'total_study_time_ms', totalTime + duration);
@@ -326,23 +361,20 @@ class StudySessionManager {
     final localDate = calculateLocalDateStr(endTime);
     final lastStudyDate = await querySetting(hotDb, 'last_study_date');
     if (lastStudyDate != localDate) {
-      // 新逻辑日：重置今日时长
       await setSettingInt(hotDb, 'today_study_time_ms', duration);
       final days = await querySettingInt(hotDb, 'total_study_days') ?? 0;
       await setSettingInt(hotDb, 'total_study_days', days + 1);
-      print('[DEBUG-REPORTS] endSession: total_study_days written = ${days + 1} (lastStudyDate=$lastStudyDate, localDate=$localDate)');
+      print('[DEBUG-REPORTS] endSession: total_study_days written = ${days + 1}');
       await setSetting(hotDb, 'last_study_date', localDate);
     } else {
-      // 同一逻辑日：累加今日时长
       final todayTime = await querySettingInt(hotDb, 'today_study_time_ms') ?? 0;
       await setSettingInt(hotDb, 'today_study_time_ms', todayTime + duration);
     }
 
-    // 更新当前词书的 Book_Progress
-    final currentBook = await querySetting(hotDb, 'current_book') ?? 'cet4';
-    await incrementBookProgress(hotDb, currentBook, session.learnedCards.length);
+    // 标记已结算，缓存结果
+    session.finalized = true;
+    session._cachedStats = stats;
 
-    session.clearTopicReadingResume();
     _currentSession = null;
 
     return stats;
@@ -947,27 +979,7 @@ class TopicReadingManager {
         result = [];
       }
       // 批量校验高亮词 UUID 有效性，失效词降级为普通文本(c=0)
-      final highlightUuids = result
-          .where((seg) => seg['c'] == 1 && (seg['u'] as String).isNotEmpty)
-          .map((seg) => seg['u'] as String)
-          .toList();
-      if (highlightUuids.isNotEmpty) {
-        final placeholders = highlightUuids.map((_) => '?').join(',');
-        final rows = await romDb.query(
-          'Note',
-          columns: ['Concept_UUID'],
-          where: 'Concept_UUID IN ($placeholders)',
-          whereArgs: highlightUuids,
-        );
-        final validUuids = rows.map((r) => r['Concept_UUID'] as String).toSet();
-        for (final seg in result) {
-          if (seg['c'] == 1 && (seg['u'] as String).isNotEmpty) {
-            if (!validUuids.contains(seg['u'])) {
-              seg['c'] = 0;
-            }
-          }
-        }
-      }
+      await filterInvalidHighlightUuids(result, romDb);
       return result;
     } catch (e) {
       // JSON 解析失败时返回空列表，便于调试时可开启日志
@@ -1033,6 +1045,31 @@ class TopicReadingManager {
       }
     }
     return null;
+  }
+}
+
+/// 批量校验高亮词 UUID 在 Note 表中的有效性，失效词降级为普通文本(c=0)
+Future<void> filterInvalidHighlightUuids(
+    List<Map<String, dynamic>> segments, Database romDb) async {
+  final highlightUuids = segments
+      .where((seg) => seg['c'] == 1 && (seg['u'] as String).isNotEmpty)
+      .map((seg) => seg['u'] as String)
+      .toList();
+  if (highlightUuids.isEmpty) return;
+  final placeholders = highlightUuids.map((_) => '?').join(',');
+  final rows = await romDb.query(
+    'Note',
+    columns: ['Concept_UUID'],
+    where: 'Concept_UUID IN ($placeholders)',
+    whereArgs: highlightUuids,
+  );
+  final validUuids = rows.map((r) => r['Concept_UUID'] as String).toSet();
+  for (final seg in segments) {
+    if (seg['c'] == 1 && (seg['u'] as String).isNotEmpty) {
+      if (!validUuids.contains(seg['u'])) {
+        seg['c'] = 0;
+      }
+    }
   }
 }
 

@@ -68,69 +68,58 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
     try {
       final session = BackendManager.instance.getStudySession();
       final pendingRating = session?.pendingRating;
-      print('[Learn] submitRating rating=$rating pendingRating=$pendingRating canResume=${session?.canResumeTopicReading}');
+      print('[Learn] submitRating rating=$rating pendingRating=$pendingRating isSingleCard=${session?.isSingleCardSource}');
       if (pendingRating == null) {
-        // 发生异常情况：没有待确认的评级，记录错误并提示用户
         print('[Learn] ERROR: pendingRating 为 null，这不应该发生');
         updatePage(() {
           errorMessage = '学习状态异常，请返回重试';
         });
         return;
       }
+
+      // 步骤 1：唯一确认落盘点
       await BackendManager.instance.confirmPendingRating(pendingRating);
       print('[Learn] confirmPendingRating 完成');
 
-      // 从收藏夹点词进来的单卡会话：学完后返回收藏夹页面
-      if (session != null && session.resumeArticleId == 'favorite') {
+      // 步骤 2：按来源回流
+      if (session != null) {
         final uuid = session.currentCard?.conceptUuid;
-        if (uuid != null) {
-          await BackendManager.instance.markTopicWordRead(uuid);
+
+        if (session.isFavoriteSource) {
+          if (uuid != null) await BackendManager.instance.markTopicWordRead(uuid);
+          print('[Learn] 回流到收藏夹');
+          ctx.go('/favoritePage');
+          return;
         }
-        print('[Learn] 回流到收藏夹');
-        ctx.go('/favoritePage');
-        return;
-      }
 
-      // 从快速筛选点词进来的单卡会话：学完后返回快速筛选页面
-      if (session != null && session.resumeArticleId == 'quick_learn') {
-        final uuid = session.currentCard?.conceptUuid;
-        if (uuid != null) {
-          await BackendManager.instance.markTopicWordRead(uuid);
+        if (session.isQuickLearnSource) {
+          if (uuid != null) await BackendManager.instance.markTopicWordRead(uuid);
+          print('[Learn] 回流到快速筛选');
+          ctx.go('/quickLearnPage');
+          return;
         }
-        print('[Learn] 回流到快速筛选');
-        ctx.go('/quickLearnPage');
-        return;
-      }
 
-      // 从语义阅读页点词进来的单卡会话：学完后返回同一篇文章
-      if (session != null && session.canResumeTopicReading) {
-        // 标记该词已在专题阅读中学过，下次进入文章时 readCount 会包含此卡
-        final uuid = session.currentCard?.conceptUuid;
-        print('[Learn] canResume=true uuid=$uuid');
-        if (uuid != null) {
-          await BackendManager.instance.markTopicWordRead(uuid);
-          print('[Learn] markTopicWordRead($uuid) 完成');
+        if (session.isTopicReadingSource) {
+          if (uuid != null) await BackendManager.instance.markTopicWordRead(uuid);
+          final articleId = session.resumeArticleId ?? 'art_tech_read_01';
+          final topicId = session.resumeTopicId ?? 'topic_tech_read';
+          print('[Learn] 回流到阅读页 articleId=$articleId');
+          GoRouter.of(ctx).go('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
+          return;
         }
-        final articleId = session.resumeArticleId ?? 'art_tech_read_01';
-        final topicId = session.resumeTopicId ?? 'topic_tech_read';
-        print('[Learn] 回流到阅读页 articleId=$articleId');
-        GoRouter.of(ctx).go('/topicReadingPage1?articleId=$articleId&topicId=$topicId');
-        return;
+
+        if (session.isTreeSource) {
+          print('[Learn] 回流到结构树 rootId=${session.treeResumeRootId}');
+          ctx.go('/treePage?rootId=${session.treeResumeRootId}');
+          return;
+        }
       }
 
-      // 从结构树页点词进来的单卡会话：学完后返回同一词根的结构树页面
-      if (session != null && session.treeResumeRootId != null) {
-        print('[Learn] treeResumeRootId=${session.treeResumeRootId}');
-        ctx.go('/treePage?rootId=${session.treeResumeRootId}');
-        return;
-      }
-
-      // 普通学习流程
+      // 步骤 3：普通学习 — 有下一张则回 Ask，否则进 ResultPage
       if (BackendManager.instance.hasSession &&
           BackendManager.instance.hasNextCard) {
         ctx.pushNamed(RandomAskPageWidget.routeName);
       } else {
-        // 获取本次学习的 UUID 列表，转为拼写列表后传给 ResultPage
         final learnedUuids = session?.learnedCards.map((c) => c.conceptUuid).toList() ?? [];
         final spellings = await BackendManager.instance.getSpellingsByUuids(learnedUuids);
         final spellingsEncoded = Uri.encodeComponent(jsonEncode(spellings));
