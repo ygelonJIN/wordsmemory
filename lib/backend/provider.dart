@@ -527,6 +527,7 @@ class BackendManager extends ChangeNotifier {
       spelling: note.spelling,
       phonetic: note.phonetic,
       etymology: formatEtymologyForDisplay(note.etymologyJson ?? ''),
+      etymologyRaw: note.etymologyJson ?? '',
       definition: note.definition,
       microContext: formatMicroContextForDisplay(note.microContextJson),
       stability: card.s,
@@ -591,6 +592,7 @@ class BackendManager extends ChangeNotifier {
       spelling: note.spelling,
       phonetic: note.phonetic,
       etymology: formatEtymologyForDisplay(note.etymologyJson ?? ''),
+      etymologyRaw: note.etymologyJson ?? '',
       definition: note.definition,
       microContext: formatMicroContextForDisplay(note.microContextJson),
       stability: card.s,
@@ -1264,6 +1266,7 @@ class RandomLearnPageData {
   final String spelling;
   final String phonetic;
   final String etymology;
+  final String etymologyRaw; // 原始 JSON，供 etymologySpans 解析用
   final String definition;
   final String microContext;
   final double stability;
@@ -1304,6 +1307,7 @@ class RandomLearnPageData {
     required this.spelling,
     required this.phonetic,
     required this.etymology,
+    required this.etymologyRaw,
     required this.definition,
     required this.microContext,
     required this.stability,
@@ -1355,7 +1359,7 @@ class RandomLearnPageData {
   String get etymologyText => etymology;
 
   /// 词根词缀 InlineSpan（数字部分为灰色上标），用于 RichText 显示
-  InlineSpan get etymologySpans => formatEtymologyAsSpans(etymology);
+  InlineSpan get etymologySpans => formatEtymologyAsSpans(etymologyRaw);
 
   String get definitionText => formatTextWithNewlines(definition);
 

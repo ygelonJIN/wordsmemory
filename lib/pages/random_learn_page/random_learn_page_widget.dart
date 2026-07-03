@@ -536,332 +536,359 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (_model.showEtymology && (_model.cardData?.etymology.isNotEmpty ?? false) && _model.cardData!.etymologySpans.toPlainText().trim().isNotEmpty) ...[
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 0.0, 20.0, 0.0),
-                                    child: Text(
-                                      '词根词缀：',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w600,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w600,
+                              Align(
+                                alignment: AlignmentDirectional(-1.0, 0.0),
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.fromSTEB(
+                                      20.0, 0.0, 20.0, 0.0),
+                                  child: Text(
+                                    '词根词缀：',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .override(
+                                          font: GoogleFonts.inter(
+                                            fontWeight: _model.showEtymology ? FontWeight.w700 : FontWeight.w600,
                                             fontStyle: FontStyle.italic,
-                                            lineHeight: 2.0,
                                           ),
-                                    ),
+                                          color: _model.showEtymology ? const Color(0xFF0000FF) : Colors.black87,
+                                          fontSize: 20.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight: _model.showEtymology ? FontWeight.w700 : FontWeight.w600,
+                                          fontStyle: FontStyle.italic,
+                                          decoration: _model.showEtymology ? TextDecoration.underline : null,
+                                          lineHeight: 2.0,
+                                        ),
                                   ),
                                 ),
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 5.0, 20.0, 0.0),
-                                    child: RichText(
-                                      text: _model.cardData?.etymologySpans ?? const TextSpan(text: ''),
-                                    ),
+                              ),
+                              Align(
+                                alignment: AlignmentDirectional(-1.0, 0.0),
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.fromSTEB(
+                                      20.0, 5.0, 20.0, 0.0),
+                                  child: RichText(
+                                    text: _model.cardData?.etymologySpans ?? const TextSpan(text: ''),
                                   ),
                                 ),
-                              ],
-                              if (_model.showDefinition) ...[
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 0.0, 20.0, 0.0),
-                                    child: Text(
-                                      '词义：',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w600,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w600,
+                              ),
+                              Align(
+                                alignment: AlignmentDirectional(-1.0, 0.0),
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.fromSTEB(
+                                      20.0, 0.0, 20.0, 0.0),
+                                  child: Text(
+                                    '词义：',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .override(
+                                          font: GoogleFonts.inter(
+                                            fontWeight: _model.showDefinition ? FontWeight.w700 : FontWeight.w600,
                                             fontStyle: FontStyle.italic,
-                                            lineHeight: 2.0,
                                           ),
-                                    ),
+                                          color: _model.showDefinition ? const Color(0xFF0000FF) : Colors.black87,
+                                          fontSize: 20.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight: _model.showDefinition ? FontWeight.w700 : FontWeight.w600,
+                                          fontStyle: FontStyle.italic,
+                                          decoration: _model.showDefinition ? TextDecoration.underline : null,
+                                          lineHeight: 2.0,
+                                        ),
                                   ),
                                 ),
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 5.0, 20.0, 0.0),
-                                    child: Text(
-                                      _model.cardData?.definitionText ?? '',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.normal,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                            fontSize: 15.0,
-                                            letterSpacing: 0.0,
+                              ),
+                              Align(
+                                alignment: AlignmentDirectional(-1.0, 0.0),
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.fromSTEB(
+                                      20.0, 5.0, 20.0, 0.0),
+                                  child: Text(
+                                    _model.cardData?.definitionText ?? '',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .override(
+                                          font: GoogleFonts.inter(
                                             fontWeight: FontWeight.normal,
                                             fontStyle:
                                                 FlutterFlowTheme.of(context)
                                                     .bodyMedium
                                                     .fontStyle,
-                                            lineHeight: 1.5,
                                           ),
-                                    ),
+                                          fontSize: 15.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight: FontWeight.normal,
+                                          fontStyle:
+                                              FlutterFlowTheme.of(context)
+                                                  .bodyMedium
+                                                  .fontStyle,
+                                          lineHeight: 1.5,
+                                        ),
                                   ),
                                 ),
-                              ],
-                              if (_model.showExample)
-                                Builder(
-                                  builder: (context) {
-                                    final ctx = _model.cardData?.contextText ?? '';
-                                    // 无有效例句内容时不显示整个区块
-                                    if (ctx.isEmpty || ctx == '{"en":"","zh":""}') {
-                                      return const SizedBox.shrink();
-                                    }
-                                    try {
-                                      final parsed = jsonDecode(ctx) as Map<String, dynamic>;
-                                      final en = (parsed['en'] as String? ?? '').trim();
-                                      final zh = (parsed['zh'] as String? ?? '').trim();
-                                      if (en.isEmpty && zh.isEmpty) return const SizedBox.shrink();
-                                    } catch (_) {}
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Align(
-                                          alignment: AlignmentDirectional(-1.0, 0.0),
-                                          child: Padding(
-                                            padding: EdgeInsetsDirectional.fromSTEB(
-                                                20.0, 0.0, 20.0, 0.0),
-                                            child: Text(
-                                              '例句：',
-                                              style: FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font: GoogleFonts.inter(
-                                                      fontWeight: FontWeight.w600,
-                                                      fontStyle: FontStyle.italic,
-                                                    ),
-                                                    fontSize: 20.0,
-                                                    letterSpacing: 0.0,
-                                                    fontWeight: FontWeight.w600,
+                              ),
+                              Builder(
+                                builder: (context) {
+                                  final ctx = _model.cardData?.contextText ?? '';
+                                  if (ctx.isEmpty || ctx == '{"en":"","zh":""}') {
+                                    return const SizedBox.shrink();
+                                  }
+                                  try {
+                                    final parsed = jsonDecode(ctx) as Map<String, dynamic>;
+                                    final en = (parsed['en'] as String? ?? '').trim();
+                                    final zh = (parsed['zh'] as String? ?? '').trim();
+                                    if (en.isEmpty && zh.isEmpty) return const SizedBox.shrink();
+                                  } catch (_) {}
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 0.0, 20.0, 0.0),
+                                          child: Text(
+                                            '例句：',
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: _model.showExample ? FontWeight.w700 : FontWeight.w600,
                                                     fontStyle: FontStyle.italic,
-                                                    lineHeight: 2.0,
                                                   ),
-                                            ),
+                                                  color: _model.showExample ? const Color(0xFF0000FF) : Colors.black87,
+                                                  fontSize: 20.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: _model.showExample ? FontWeight.w700 : FontWeight.w600,
+                                                  fontStyle: FontStyle.italic,
+                                                  decoration: _model.showExample ? TextDecoration.underline : null,
+                                                  lineHeight: 2.0,
+                                                ),
                                           ),
                                         ),
-                                        Align(
-                                          alignment: AlignmentDirectional(-1.0, 0.0),
-                                          child: Padding(
-                                            padding: EdgeInsetsDirectional.fromSTEB(
-                                                20.0, 5.0, 20.0, 0.0),
-                                            child: Text(
-                                              ctx,
-                                              style: FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font: GoogleFonts.inter(
-                                                      fontWeight: FontWeight.normal,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                    fontSize: 15.0,
-                                                    letterSpacing: 0.0,
+                                      ),
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 5.0, 20.0, 0.0),
+                                          child: Text(
+                                            ctx,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
                                                     fontWeight: FontWeight.normal,
                                                     fontStyle:
                                                         FlutterFlowTheme.of(context)
                                                             .bodyMedium
                                                             .fontStyle,
-                                                    lineHeight: 1.5,
                                                   ),
-                                            ),
+                                                  fontSize: 15.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: FontWeight.normal,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(context)
+                                                          .bodyMedium
+                                                          .fontStyle,
+                                                  lineHeight: 1.5,
+                                                ),
                                           ),
                                         ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              // ===== 英语释义区块 =====
-                              if (_model.showEnglishDefinition && _model.cardData?.definitionEn != null &&
-                                  _model.cardData!.definitionEn!.isNotEmpty)
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 0.0, 20.0, 0.0),
-                                    child: Text(
-                                      '英语释义：',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w600,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w600,
-                                            fontStyle: FontStyle.italic,
-                                            lineHeight: 2.0,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              if (_model.showEnglishDefinition && _model.cardData?.definitionEn != null &&
-                                  _model.cardData!.definitionEn!.isNotEmpty)
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 5.0, 20.0, 0.0),
-                                    child: Text(
-                                      _model.cardData!.definitionEnText!,
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.normal,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                            fontSize: 15.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.normal,
-                                            lineHeight: 1.5,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              // ===== 近义词辨析区块 =====
-                              if (_model.showSynonym && _model.cardData?.synonymGroupTitleText != null &&
-                                  _model.cardData!.synonymGroupTitleText!.isNotEmpty) ...[
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 0.0, 20.0, 0.0),
-                                    child: Text(
-                                      '近义词辨析：',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w600,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w600,
-                                            fontStyle: FontStyle.italic,
-                                            lineHeight: 2.0,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 5.0, 20.0, 0.0),
-                                    child: Text(
-                                      _model.cardData!.synonymGroupTitleText!,
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.normal,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                            fontSize: 15.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.normal,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                            lineHeight: 1.5,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              // ===== 时态变形区块 =====
-                              if (_model.showTense && _model.cardData?.tenseText != null &&
-                                  _model.cardData!.tenseText!.isNotEmpty) ...[
-                                Align(
-                                  alignment: AlignmentDirectional(-1.0, 0.0),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        20.0, 0.0, 20.0, 0.0),
-                                    child: Text(
-                                      '时态变形：',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w600,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w600,
-                                            fontStyle: FontStyle.italic,
-                                            lineHeight: 2.0,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                                if (_model.showTense && _model.cardData?.tenseText != null &&
-                                    _model.cardData!.tenseText!.isNotEmpty) ...[
-                                  Align(
-                                    alignment: AlignmentDirectional(-1.0, 0.0),
-                                    child: Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          20.0, 5.0, 20.0, 0.0),
-                                      child: Text(
-                                        _model.cardData!.tenseText!,
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.inter(
-                                                fontWeight: FontWeight.normal,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              fontSize: 15.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.normal,
-                                              lineHeight: 1.5,
-                                            ),
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                                    ],
+                                  );
+                                },
+                              ),
+                              Builder(
+                                builder: (context) {
+                                  if (_model.cardData?.definitionEn == null || _model.cardData!.definitionEn!.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 0.0, 20.0, 0.0),
+                                          child: Text(
+                                            '英语释义：',
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: _model.showEnglishDefinition ? FontWeight.w700 : FontWeight.w600,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                  color: _model.showEnglishDefinition ? const Color(0xFF0000FF) : Colors.black87,
+                                                  fontSize: 20.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: _model.showEnglishDefinition ? FontWeight.w700 : FontWeight.w600,
+                                                  fontStyle: FontStyle.italic,
+                                                  decoration: _model.showEnglishDefinition ? TextDecoration.underline : null,
+                                                  lineHeight: 2.0,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 5.0, 20.0, 0.0),
+                                          child: Text(
+                                            _model.cardData!.definitionEnText!,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: FontWeight.normal,
+                                                    fontStyle:
+                                                        FlutterFlowTheme.of(context)
+                                                            .bodyMedium
+                                                            .fontStyle,
+                                                  ),
+                                                  fontSize: 15.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: FontWeight.normal,
+                                                  lineHeight: 1.5,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              Builder(
+                                builder: (context) {
+                                  if (_model.cardData?.synonymGroupTitleText == null ||
+                                      _model.cardData!.synonymGroupTitleText!.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 0.0, 20.0, 0.0),
+                                          child: Text(
+                                            '近义词辨析：',
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: _model.showSynonym ? FontWeight.w700 : FontWeight.w600,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                  color: _model.showSynonym ? const Color(0xFF0000FF) : Colors.black87,
+                                                  fontSize: 20.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: _model.showSynonym ? FontWeight.w700 : FontWeight.w600,
+                                                  fontStyle: FontStyle.italic,
+                                                  decoration: _model.showSynonym ? TextDecoration.underline : null,
+                                                  lineHeight: 2.0,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 5.0, 20.0, 0.0),
+                                          child: Text(
+                                            _model.cardData!.synonymGroupTitleText!,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: FontWeight.normal,
+                                                    fontStyle:
+                                                        FlutterFlowTheme.of(context)
+                                                            .bodyMedium
+                                                            .fontStyle,
+                                                  ),
+                                                  fontSize: 15.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: FontWeight.normal,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(context)
+                                                          .bodyMedium
+                                                          .fontStyle,
+                                                  lineHeight: 1.5,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              Builder(
+                                builder: (context) {
+                                  if (_model.cardData?.tenseText == null || _model.cardData!.tenseText!.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 0.0, 20.0, 0.0),
+                                          child: Text(
+                                            '时态变形：',
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: _model.showTense ? FontWeight.w700 : FontWeight.w600,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                  color: _model.showTense ? const Color(0xFF0000FF) : Colors.black87,
+                                                  fontSize: 20.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: _model.showTense ? FontWeight.w700 : FontWeight.w600,
+                                                  fontStyle: FontStyle.italic,
+                                                  decoration: _model.showTense ? TextDecoration.underline : null,
+                                                  lineHeight: 2.0,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: AlignmentDirectional(-1.0, 0.0),
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                              20.0, 5.0, 20.0, 0.0),
+                                          child: Text(
+                                            _model.cardData!.tenseText!,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: FontWeight.normal,
+                                                    fontStyle:
+                                                        FlutterFlowTheme.of(context)
+                                                            .bodyMedium
+                                                            .fontStyle,
+                                                  ),
+                                                  fontSize: 15.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: FontWeight.normal,
+                                                  lineHeight: 1.5,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
