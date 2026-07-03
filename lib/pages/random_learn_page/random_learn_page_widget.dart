@@ -701,7 +701,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                   },
                                 ),
                               // ===== 英语释义区块 =====
-                              if (_model.cardData?.definitionEn != null &&
+                              if (_model.showEnglishDefinition && _model.cardData?.definitionEn != null &&
                                   _model.cardData!.definitionEn!.isNotEmpty)
                                 Align(
                                   alignment: AlignmentDirectional(-1.0, 0.0),
@@ -726,7 +726,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                     ),
                                   ),
                                 ),
-                              if (_model.cardData?.definitionEn != null &&
+                              if (_model.showEnglishDefinition && _model.cardData?.definitionEn != null &&
                                   _model.cardData!.definitionEn!.isNotEmpty)
                                 Align(
                                   alignment: AlignmentDirectional(-1.0, 0.0),
@@ -754,7 +754,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                   ),
                                 ),
                               // ===== 近义词辨析区块 =====
-                              if (_model.cardData?.synonymGroupTitleText != null &&
+                              if (_model.showSynonym && _model.cardData?.synonymGroupTitleText != null &&
                                   _model.cardData!.synonymGroupTitleText!.isNotEmpty) ...[
                                 Align(
                                   alignment: AlignmentDirectional(-1.0, 0.0),
@@ -810,7 +810,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 ),
                               ],
                               // ===== 时态变形区块 =====
-                              if (_model.cardData?.tenseText != null &&
+                              if (_model.showTense && _model.cardData?.tenseText != null &&
                                   _model.cardData!.tenseText!.isNotEmpty) ...[
                                 Align(
                                   alignment: AlignmentDirectional(-1.0, 0.0),
@@ -835,7 +835,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                     ),
                                   ),
                                 ),
-                                if (_model.cardData?.tenseText != null &&
+                                if (_model.showTense && _model.cardData?.tenseText != null &&
                                     _model.cardData!.tenseText!.isNotEmpty) ...[
                                   Align(
                                     alignment: AlignmentDirectional(-1.0, 0.0),
