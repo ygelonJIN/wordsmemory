@@ -110,7 +110,8 @@ InlineSpan _buildLineSpan(String root, String meaning) {
     // "root — meaning"
     return TextSpan(children: [
       _buildEtymologySpans(root),
-      TextSpan(text: ' — $meaning'),
+      TextSpan(text: ' — $meaning',
+        style: const TextStyle(color: Color(0xFF222222))),
     ]);
   }
   return _buildEtymologySpans(root);
@@ -158,13 +159,15 @@ InlineSpan _buildEtymologySpans(String text) {
 
   for (final match in regex.allMatches(text)) {
     if (match.start > lastEnd) {
-      spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      spans.add(TextSpan(text: text.substring(lastEnd, match.start),
+        style: const TextStyle(color: Color(0xFF222222))));
     }
     final prefix = match.group(1) ?? '';
     final digits = match.group(2) ?? '';
     final superscripted = digits.split('').map((c) => superscripts[c] ?? c).join();
 
-    spans.add(TextSpan(text: prefix)); // 词根：默认颜色
+    spans.add(TextSpan(text: prefix,
+      style: const TextStyle(color: Color(0xFF222222)))); // 词根
     spans.add(TextSpan(
       text: superscripted,
       style: const TextStyle(color: Color(0xFF888888)), // 数字：灰色
@@ -173,7 +176,8 @@ InlineSpan _buildEtymologySpans(String text) {
   }
 
   if (lastEnd < text.length) {
-    spans.add(TextSpan(text: text.substring(lastEnd)));
+    spans.add(TextSpan(text: text.substring(lastEnd),
+      style: const TextStyle(color: Color(0xFF222222))));
   }
 
   if (spans.isEmpty) {
