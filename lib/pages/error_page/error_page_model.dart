@@ -62,17 +62,20 @@ class ErrorPageModel extends FlutterFlowModel<ErrorPageWidget> {
 
   ErrorPageModel({
     String? errorCode,
+    String? customTitle,
     String? guideText,
-  })  : errorTitle = _resolveTitle(errorCode, guideText),
+  })  : errorTitle = _resolveTitle(errorCode, customTitle),
         guideText = _resolveGuide(errorCode, guideText);
 
-  static String _resolveTitle(String? errorCode, String? customGuide) {
-    if (customGuide != null) return customGuide;
+  /// errorTitle: 优先级 customTitle > errorCode 映射 > UNKNOWN_ERROR
+  static String _resolveTitle(String? errorCode, String? customTitle) {
+    if (customTitle != null) return customTitle;
     if (errorCode == null) return kErrorCodeConfig['UNKNOWN_ERROR']!.title;
     return kErrorCodeConfig[errorCode]?.title ??
         kErrorCodeConfig['UNKNOWN_ERROR']!.title;
   }
 
+  /// guideText: 优先级 guideText 参数 > errorCode 映射 > UNKNOWN_ERROR
   static String _resolveGuide(String? errorCode, String? customGuide) {
     if (customGuide != null) return customGuide;
     if (errorCode == null) return kErrorCodeConfig['UNKNOWN_ERROR']!.guide;

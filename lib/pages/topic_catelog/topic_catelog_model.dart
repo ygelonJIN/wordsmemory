@@ -51,19 +51,6 @@ class TopicCatelogModel extends FlutterFlowModel<TopicCatelogWidget> {
     try {
       updatePage(() => isLoading = true);
 
-      print('[TopicCatalog-Model] 开始 initialize() + 5s超时');
-      try {
-        await BackendManager.instance.initialize().timeout(
-          Duration(seconds: 5),
-          onTimeout: () => print('[TopicCatalog-Model] initialize() 超时！'),
-        );
-      } catch (e, st) {
-        print('[TopicCatalog-Model] initialize() 抛异常: $e\n$st');
-        rethrow;
-      }
-      print('[TopicCatalog-Model] initialize() 返回了');
-
-      print('[TopicCatalog-Model] 调用 loadTopics()...');
       final rawTopics = await BackendManager.instance.loadTopics();
       print('[TopicCatalog-Model] loadTopics 返回 ${rawTopics.length} 个专题');
       final loaded = <TopicItemModel>[];
