@@ -13,6 +13,8 @@ class FavoritePageModel extends FlutterFlowModel<FavoritePageWidget> {
   String remaining = '0';
   bool isLoading = false;
 
+  bool get isEmpty => items.isEmpty && !isLoading;
+
   @override
   void initState(BuildContext context) {
     updateOnChange = true;
@@ -66,6 +68,7 @@ class FavoritePageModel extends FlutterFlowModel<FavoritePageWidget> {
   Future<void> startFavoriteReviewSession() async {
     final ctx = context;
     if (ctx == null) return;
+    if (isEmpty) return;
     try {
       await BackendManager.instance.createFavoriteReviewSession();
       ctx.pushNamed(RandomAskPageWidget.routeName);
@@ -77,6 +80,7 @@ class FavoritePageModel extends FlutterFlowModel<FavoritePageWidget> {
   Future<void> startFavoriteLearnSession() async {
     final ctx = context;
     if (ctx == null) return;
+    if (isEmpty) return;
     try {
       await BackendManager.instance.createFavoriteLearnSession();
       ctx.pushNamed(RandomAskPageWidget.routeName);

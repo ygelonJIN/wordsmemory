@@ -764,9 +764,9 @@ class BackendManager extends ChangeNotifier {
 
   String getQuickLearnProgress() {
     final session = _studyManager?.currentSession;
-    if (session == null) return '本次已标注: 0 个';
+    if (session == null) return '已标注 0/0 张';
     final known = session.learnedCards.length;
-    return '本次已标注: $known 个 / ${session.total} 张';
+    return '已标注 $known/${session.total} 张';
   }
 
   Future<void> toggleQuickLearnKnown(int index) async {

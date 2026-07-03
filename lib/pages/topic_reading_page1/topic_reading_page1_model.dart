@@ -185,18 +185,20 @@ class TopicReadingPage1Model extends FlutterFlowModel<TopicReadingPage1Widget> {
   Future<void> onFinish() async {
     final ctx = context;
     if (ctx == null) return;
-    // 如果有活跃会话，获取本次学习的 UUID 列表后传给 ResultPage
-    if (BackendManager.instance.hasSession) {
-      final learnedUuids = BackendManager.instance.getStudySession()?.learnedCards
-              .map((c) => c.conceptUuid)
-              .toList() ??
-          [];
-      final spellings = await BackendManager.instance.getSpellingsByUuids(learnedUuids);
-      final spellingsEncoded = Uri.encodeComponent(jsonEncode(spellings));
-      ctx.push('${ResultPageWidget.routePath}?fromSemanticReading=true&learnedSpellings=$spellingsEncoded');
-    } else {
-      ctx.push('${ResultPageWidget.routePath}?fromSemanticReading=true');
+    // 无活跃会话 → 只是浏览结束，回目录页
+    if (!BackendManager.instance.hasSession) {
+      final tid = widget?.topicId ?? 'topic_tech_read';
+      ctx.go('/topicCatelog?topicId=$tid');
+      return;
     }
+    // 有活跃会话 → 学习结算
+    final learnedUuids = BackendManager.instance.getStudySession()?.learnedCards
+            .map((c) => c.conceptUuid)
+            .toList() ??
+        [];
+    final spellings = await BackendManager.instance.getSpellingsByUuids(learnedUuids);
+    final spellingsEncoded = Uri.encodeComponent(jsonEncode(spellings));
+    ctx.push('${ResultPageWidget.routePath}?fromSemanticReading=true&learnedSpellings=$spellingsEncoded');
   }
 
   @override
