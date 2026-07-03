@@ -136,7 +136,7 @@ class _QuickLearnPageWidgetState extends State<QuickLearnPageWidget> {
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
-                            context.push('${ResultPageWidget.routePath}?fromQuickLearn=true');
+                            await _model.onFinish();
                           },
                           child: Text(
                             'finish',

@@ -84,6 +84,14 @@ class QuickLearnPageModel extends FlutterFlowModel<QuickLearnPageWidget> {
     refreshItems();
   }
 
+  /// 结束快速筛选：仅当列表非空时允许进入结果页
+  Future<void> onFinish() async {
+    final ctx = context;
+    if (ctx == null) return;
+    if (items.isEmpty || isLoading) return;
+    ctx.push('${ResultPageWidget.routePath}?fromQuickLearn=true');
+  }
+
   @override
   void dispose() {
     _disposed = true;

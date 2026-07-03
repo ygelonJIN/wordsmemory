@@ -53,7 +53,22 @@ class TreePageModel extends FlutterFlowModel<TreePageWidget> {
   Future<void> finishLearning(BuildContext context) async {
     try {
       final session = BackendManager.instance.getStudySession();
-      final uuids = session?.learnedCards.map((c) => c.conceptUuid).toList() ?? [];
+      // 无活跃会话 → 回树目录页
+      if (session == null) {
+        context.go('/treeCatelog');
+        return;
+      }
+      // 非树来源 → 不回 ResultPage（防止误入）
+      if (!session.isTreeSource) {
+        context.go('/treeCatelog');
+        return;
+      }
+      // 无已学内容 → 回树目录页
+      if (session.learnedCards.isEmpty) {
+        context.go('/treePage?rootId=$currentRootId');
+        return;
+      }
+      final uuids = session.learnedCards.map((c) => c.conceptUuid).toList();
       final spellings = await BackendManager.instance.getSpellingsByUuids(uuids);
       final encoded = Uri.encodeComponent(jsonEncode(spellings));
       context.push('${ResultPageWidget.routePath}?fromTreeLearning=true&learnedSpellings=$encoded');
