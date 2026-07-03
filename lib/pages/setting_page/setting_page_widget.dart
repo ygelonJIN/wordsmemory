@@ -729,194 +729,20 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowEtymology(!_model.showEtymology),
-                                    child: Text(
-                                      '词根词缀',
-                                      textAlign: TextAlign.center,
-                                      style: FlutterFlowTheme.of(context)
-                                          .displayLarge
-                                          .override(
-                                            font: GoogleFonts.notoSans(
-                                            fontWeight: _model.showEtymology
-                                                ? FontWeight.w700
-                                                : FontWeight.normal,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.showEtymology
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.showEtymology
-                                              ? FontWeight.w700
-                                              : FontWeight.w400,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                            decoration: TextDecoration.underline,
-                                            lineHeight: 1.5,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowDefinition(!_model.showDefinition),
-                                  child: Text(
-                                    '词义',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context)
-                                        .displayLarge
-                                        .override(
-                                          font: GoogleFonts.notoSans(
-                                            fontWeight: _model.showDefinition
-                                                ? FontWeight.w700
-                                                : FontWeight.normal,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.showDefinition
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.showDefinition
-                                              ? FontWeight.w700
-                                              : FontWeight.w400,
-                                          fontStyle: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .fontStyle,
-                                          decoration: TextDecoration.underline,
-                                          lineHeight: 1.5,
-                                        ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowExample(!_model.showExample),
-                                  child: Text(
-                                    '例句',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context)
-                                        .displayLarge
-                                        .override(
-                                          font: GoogleFonts.notoSans(
-                                            fontWeight: _model.showExample
-                                                ? FontWeight.w700
-                                                : FontWeight.normal,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.showExample
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: _model.showExample
-                                              ? FontWeight.w700
-                                              : FontWeight.w400,
-                                          fontStyle: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .fontStyle,
-                                          decoration: TextDecoration.underline,
-                                          lineHeight: 1.5,
-                                        ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowEnglishDefinition(!_model.showEnglishDefinition),
-                                  child: Text(
-                                    '英语释义',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context).displayLarge.override(
-                                      font: GoogleFonts.notoSans(
-                                        fontWeight: _model.showEnglishDefinition ? FontWeight.w700 : FontWeight.normal,
-                                        fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
-                                      ),
-                                      color: _model.showEnglishDefinition ? const Color(0xFF0000FF) : Colors.black,
-                                      fontSize: 20.0, letterSpacing: 0.0,
-                                      fontWeight: _model.showEnglishDefinition ? FontWeight.w700 : FontWeight.w400,
-                                      fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
-                                      decoration: TextDecoration.underline, lineHeight: 1.5,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowSynonym(!_model.showSynonym),
-                                  child: Text(
-                                    '近义词辨析',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context).displayLarge.override(
-                                      font: GoogleFonts.notoSans(
-                                        fontWeight: _model.showSynonym ? FontWeight.w700 : FontWeight.normal,
-                                        fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
-                                      ),
-                                      color: _model.showSynonym ? const Color(0xFF0000FF) : Colors.black,
-                                      fontSize: 20.0, letterSpacing: 0.0,
-                                      fontWeight: _model.showSynonym ? FontWeight.w700 : FontWeight.w400,
-                                      fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
-                                      decoration: TextDecoration.underline, lineHeight: 1.5,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 12.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                    onTap: () => _model.setShowTense(!_model.showTense),
-                                  child: Text(
-                                    '时态变形',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context).displayLarge.override(
-                                      font: GoogleFonts.notoSans(
-                                        fontWeight: _model.showTense ? FontWeight.w700 : FontWeight.normal,
-                                        fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
-                                      ),
-                                      color: _model.showTense ? const Color(0xFF0000FF) : Colors.black,
-                                      fontSize: 20.0, letterSpacing: 0.0,
-                                      fontWeight: _model.showTense ? FontWeight.w700 : FontWeight.w400,
-                                      fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
-                                      decoration: TextDecoration.underline, lineHeight: 1.5,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 20.0, 0.0),
-                                  child: SizedBox(width: 1.0),
-                                ),
+                                _AuxToggleItem(label: '词根词缀', isSelected: _model.showEtymology, leftPadding: 20.0, rightPadding: 12.0, onTap: () => _model.setShowEtymology(!_model.showEtymology)),
+                                _AuxToggleItem(label: '词义', isSelected: _model.showDefinition, leftPadding: 0.0, rightPadding: 12.0, onTap: () => _model.setShowDefinition(!_model.showDefinition)),
+                                _AuxToggleItem(label: '英语释义', isSelected: _model.showEnglishDefinition, leftPadding: 0.0, rightPadding: 12.0, onTap: () => _model.setShowEnglishDefinition(!_model.showEnglishDefinition)),
                               ],
                             ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _AuxToggleItem(label: '例句', isSelected: _model.showExample, leftPadding: 20.0, rightPadding: 12.0, onTap: () => _model.setShowExample(!_model.showExample)),
+                                _AuxToggleItem(label: '近义词辨析', isSelected: _model.showSynonym, leftPadding: 0.0, rightPadding: 12.0, onTap: () => _model.setShowSynonym(!_model.showSynonym)),
+                                _AuxToggleItem(label: '时态变形', isSelected: _model.showTense, leftPadding: 0.0, rightPadding: 20.0, onTap: () => _model.setShowTense(!_model.showTense)),
+                              ],
+                            ),
+
                       ],
                     ),
                   ),
@@ -974,6 +800,34 @@ class _WordBookItem extends StatelessWidget {
                 decoration: TextDecoration.underline,
                 lineHeight: 1.5,
               ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuxToggleItem extends StatelessWidget {
+  const _AuxToggleItem({required this.label, required this.isSelected, required this.leftPadding, required this.rightPadding, required this.onTap});
+  final String label;
+  final bool isSelected;
+  final double leftPadding;
+  final double rightPadding;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: leftPadding, right: rightPadding),
+      child: InkWell(
+        splashColor: Colors.transparent, focusColor: Colors.transparent, hoverColor: Colors.transparent, highlightColor: Colors.transparent,
+        onTap: onTap,
+        child: Text(label, textAlign: TextAlign.center,
+          style: FlutterFlowTheme.of(context).displayLarge.override(
+            font: GoogleFonts.notoSans(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle),
+            color: isSelected ? const Color(0xFF0000FF) : Colors.black, fontSize: 20.0, letterSpacing: 0.0,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal, fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+            decoration: TextDecoration.underline, lineHeight: 1.5,
+          ),
         ),
       ),
     );

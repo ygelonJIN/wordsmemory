@@ -566,8 +566,20 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                 child: Padding(
                                   padding: EdgeInsetsDirectional.fromSTEB(
                                       20.0, 5.0, 20.0, 0.0),
-                                  child: RichText(
-                                    text: _model.cardData?.etymologySpans ?? const TextSpan(text: ''),
+                                  child: DefaultTextStyle(
+                                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                      font: GoogleFonts.inter(
+                                        fontWeight: FontWeight.normal,
+                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                      ),
+                                      fontSize: 15.0,
+                                      letterSpacing: 0.0,
+                                      fontWeight: FontWeight.normal,
+                                      lineHeight: 1.5,
+                                    ),
+                                    child: RichText(
+                                      text: _model.cardData?.etymologySpans ?? const TextSpan(text: ''),
+                                    ),
                                   ),
                                 ),
                               ),
