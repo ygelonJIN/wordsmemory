@@ -572,6 +572,7 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                                         fontWeight: FontWeight.normal,
                                         fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                       ),
+                                      color: Colors.black87,
                                       fontSize: 15.0,
                                       letterSpacing: 0.0,
                                       fontWeight: FontWeight.normal,

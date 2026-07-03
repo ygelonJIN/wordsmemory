@@ -325,9 +325,9 @@ class _TopicReadingPage2WidgetState extends State<TopicReadingPage2Widget> with 
                                     return TextSpan(
                                       text: seg.text,
                                       style: TextStyle(
-                                        fontWeight: seg.isHighlighted ? FontWeight.w700 : FontWeight.w500,
-                                        color: seg.isHighlighted ? Color(0xFF0000FF) : Colors.black,
-                                        decoration: seg.isHighlighted ? TextDecoration.underline : TextDecoration.none,
+                                        fontWeight: (seg.isHighlighted && seg.uuid != null) ? FontWeight.w700 : FontWeight.w500,
+                                        color: (seg.isHighlighted && seg.uuid != null) ? Color(0xFF0000FF) : Colors.black,
+                                        decoration: (seg.isHighlighted && seg.uuid != null) ? TextDecoration.underline : TextDecoration.none,
                                       ),
                                     );
                                   }).toList(),
