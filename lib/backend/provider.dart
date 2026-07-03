@@ -790,6 +790,15 @@ class BackendManager extends ChangeNotifier {
 
     final willBeKnown = !isCurrentlyKnown;
     await toggleWordScreenStatus(_hotDb!, uuid, willBeKnown);
+
+    // 同步维护 session.learnedCards（用于进度文本实时刷新）
+    if (willBeKnown) {
+      if (!learnedSet.contains(uuid)) {
+        session.addLearned(card);
+      }
+    } else {
+      session.learnedCards.removeWhere((c) => c.conceptUuid == uuid);
+    }
   }
 
   Future<void> loadNextQuickLearnPage() async {
@@ -1037,7 +1046,9 @@ class BackendManager extends ChangeNotifier {
       showEtymology: (await querySetting(_hotDb!, 'show_etymology') ?? '1') == '1',
       showDefinition: (await querySetting(_hotDb!, 'show_definition') ?? '1') == '1',
       showExample: (await querySetting(_hotDb!, 'show_example') ?? '1') == '1',
-      dailyRefreshHour: int.tryParse(await querySetting(_hotDb!, 'daily_refresh_hour') ?? '0') ?? 0,
+      showEnglishDefinition: (await querySetting(_hotDb!, 'show_english_definition') ?? '1') == '1',
+      showSynonym: (await querySetting(_hotDb!, 'show_synonym') ?? '1') == '1',
+      showTense: (await querySetting(_hotDb!, 'show_tense') ?? '1') == '1',
     );
   }
 
@@ -1543,7 +1554,9 @@ class SettingsData {
   final bool showEtymology;
   final bool showDefinition;
   final bool showExample;
-  final int dailyRefreshHour;
+  final bool showEnglishDefinition;
+  final bool showSynonym;
+  final bool showTense;
 
   SettingsData({
     required this.userName,
@@ -1552,7 +1565,9 @@ class SettingsData {
     required this.showEtymology,
     required this.showDefinition,
     required this.showExample,
-    required this.dailyRefreshHour,
+    required this.showEnglishDefinition,
+    required this.showSynonym,
+    required this.showTense,
   });
 
   String get userNameText => userName.isEmpty ? 'Hi,' : 'Hi,$userName';

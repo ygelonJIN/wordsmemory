@@ -61,7 +61,9 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
   bool showEtymology = true;
   bool showDefinition = true;
   bool showExample = true;
-  int dailyRefreshHour = 0;
+  bool showEnglishDefinition = true;
+  bool showSynonym = true;
+  bool showTense = true;
 
   String get userName => settingsData?.userNameText ?? 'Hi,';
 
@@ -127,7 +129,9 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
           showEtymology = data.showEtymology;
           showDefinition = data.showDefinition;
           showExample = data.showExample;
-          dailyRefreshHour = data.dailyRefreshHour;
+          showEnglishDefinition = data.showEnglishDefinition;
+          showSynonym = data.showSynonym;
+          showTense = data.showTense;
         });
       }
     } catch (e, st) {
@@ -167,9 +171,19 @@ class SettingPageModel extends FlutterFlowModel<SettingPageWidget> {
     updatePage(() => showExample = value);
   }
 
-  Future<void> setDailyRefreshHour(int hour) async {
-    await BackendManager.instance.updateSetting('daily_refresh_hour', hour.toString());
-    updatePage(() => dailyRefreshHour = hour);
+  Future<void> setShowEnglishDefinition(bool value) async {
+    await BackendManager.instance.updateSetting('show_english_definition', value ? '1' : '0');
+    updatePage(() => showEnglishDefinition = value);
+  }
+
+  Future<void> setShowSynonym(bool value) async {
+    await BackendManager.instance.updateSetting('show_synonym', value ? '1' : '0');
+    updatePage(() => showSynonym = value);
+  }
+
+  Future<void> setShowTense(bool value) async {
+    await BackendManager.instance.updateSetting('show_tense', value ? '1' : '0');
+    updatePage(() => showTense = value);
   }
 
   Future<void> saveUserName(String name) async {

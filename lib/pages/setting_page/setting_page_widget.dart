@@ -854,203 +854,78 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                         ),
                                   ),
                                 ),
+                                SizedBox(width: 12.0),
+                                InkWell(
+                                  splashColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                    onTap: () => _model.setShowEnglishDefinition(!_model.showEnglishDefinition),
+                                  child: Text(
+                                    '英语释义',
+                                    textAlign: TextAlign.center,
+                                    style: FlutterFlowTheme.of(context).displayLarge.override(
+                                      font: GoogleFonts.notoSans(
+                                        fontWeight: _model.showEnglishDefinition ? FontWeight.w700 : FontWeight.normal,
+                                        fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                                      ),
+                                      color: _model.showEnglishDefinition ? const Color(0xFF0000FF) : Colors.black,
+                                      fontSize: 20.0, letterSpacing: 0.0,
+                                      fontWeight: _model.showEnglishDefinition ? FontWeight.w700 : FontWeight.w400,
+                                      fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                                      decoration: TextDecoration.underline, lineHeight: 1.5,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12.0),
+                                InkWell(
+                                  splashColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                    onTap: () => _model.setShowSynonym(!_model.showSynonym),
+                                  child: Text(
+                                    '近义词辨析',
+                                    textAlign: TextAlign.center,
+                                    style: FlutterFlowTheme.of(context).displayLarge.override(
+                                      font: GoogleFonts.notoSans(
+                                        fontWeight: _model.showSynonym ? FontWeight.w700 : FontWeight.normal,
+                                        fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                                      ),
+                                      color: _model.showSynonym ? const Color(0xFF0000FF) : Colors.black,
+                                      fontSize: 20.0, letterSpacing: 0.0,
+                                      fontWeight: _model.showSynonym ? FontWeight.w700 : FontWeight.w400,
+                                      fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                                      decoration: TextDecoration.underline, lineHeight: 1.5,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12.0),
+                                InkWell(
+                                  splashColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                    onTap: () => _model.setShowTense(!_model.showTense),
+                                  child: Text(
+                                    '时态变形',
+                                    textAlign: TextAlign.center,
+                                    style: FlutterFlowTheme.of(context).displayLarge.override(
+                                      font: GoogleFonts.notoSans(
+                                        fontWeight: _model.showTense ? FontWeight.w700 : FontWeight.normal,
+                                        fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                                      ),
+                                      color: _model.showTense ? const Color(0xFF0000FF) : Colors.black,
+                                      fontSize: 20.0, letterSpacing: 0.0,
+                                      fontWeight: _model.showTense ? FontWeight.w700 : FontWeight.w400,
+                                      fontStyle: FlutterFlowTheme.of(context).displayLarge.fontStyle,
+                                      decoration: TextDecoration.underline, lineHeight: 1.5,
+                                    ),
+                                  ),
+                                ),
                                 Padding(
                                   padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 20.0, 0.0),
                                   child: SizedBox(width: 1.0),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          scrollDirection: Axis.vertical,
-                          children: [
-                            Align(
-                              alignment: AlignmentDirectional(-1.0, 0.0),
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    20.0, 0.0, 20.0, 0.0),
-                                child: Text(
-                                  '每日刷新时间：',
-                                  style: FlutterFlowTheme.of(context)
-                                      .displayMedium
-                                      .override(
-                                        font: GoogleFonts.notoSans(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .displayMedium
-                                                  .fontWeight,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                        color: Colors.black,
-                                        fontSize: 24.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .displayMedium
-                                            .fontWeight,
-                                        fontStyle: FontStyle.italic,
-                                        lineHeight: 2.0,
-                                      ),
-                                ),
-                              ),
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onTap: () => _model.setDailyRefreshHour(0),
-                                    child: Text(
-                                      '0.',
-                                      textAlign: TextAlign.center,
-                                      style: FlutterFlowTheme.of(context)
-                                          .displayLarge
-                                          .override(
-                                            font: GoogleFonts.notoSans(
-                                              fontWeight: _model.dailyRefreshHour == 0
-                                                  ? FontWeight.w700
-                                                  : FontWeight.normal,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                          ),
-                                          color: _model.dailyRefreshHour == 0
-                                              ? const Color(0xFF0000FF)
-                                              : Colors.black,
-                                          fontSize: 20.0,
-                                          letterSpacing: 0.0,
-                                              fontWeight: _model.dailyRefreshHour == 0
-                                                  ? FontWeight.w700
-                                                  : FontWeight.normal,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                            decoration: TextDecoration.underline,
-                                            lineHeight: 1.5,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 8.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () => _model.setDailyRefreshHour(4),
-                                  child: Text(
-                                    '4.',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context)
-                                        .displayLarge
-                                        .override(
-                                          font: GoogleFonts.notoSans(
-                                                  fontWeight: _model.dailyRefreshHour == 4
-                                                      ? FontWeight.w700
-                                                      : FontWeight.normal,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.dailyRefreshHour == 4
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                                  fontWeight: _model.dailyRefreshHour == 4
-                                                      ? FontWeight.w700
-                                                      : FontWeight.normal,
-                                          fontStyle: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .fontStyle,
-                                          decoration: TextDecoration.underline,
-                                          lineHeight: 1.5,
-                                        ),
-                                  ),
-                                ),
-                                SizedBox(width: 8.0),
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () => _model.setDailyRefreshHour(8),
-                                  child: Text(
-                                    '8.',
-                                    textAlign: TextAlign.center,
-                                    style: FlutterFlowTheme.of(context)
-                                        .displayLarge
-                                        .override(
-                                          font: GoogleFonts.notoSans(
-                                                  fontWeight: _model.dailyRefreshHour == 8
-                                                      ? FontWeight.w700
-                                                      : FontWeight.normal,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.dailyRefreshHour == 8
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                                  fontWeight: _model.dailyRefreshHour == 8
-                                                      ? FontWeight.w700
-                                                      : FontWeight.normal,
-                                          fontStyle: FlutterFlowTheme.of(context)
-                                              .displayLarge
-                                              .fontStyle,
-                                          decoration: TextDecoration.underline,
-                                          lineHeight: 1.5,
-                                        ),
-                                  ),
-                                ),
-                                SizedBox(width: 8.0),
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 20.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onTap: () => _model.setDailyRefreshHour(18),
-                                    child: Text(
-                                      '18.',
-                                      textAlign: TextAlign.center,
-                                      style: FlutterFlowTheme.of(context)
-                                          .displayLarge
-                                          .override(
-                                            font: GoogleFonts.notoSans(
-                                                  fontWeight: _model.dailyRefreshHour == 18
-                                                      ? FontWeight.w700
-                                                      : FontWeight.normal,
-                                              fontStyle: FlutterFlowTheme.of(context)
-                                                  .displayLarge
-                                                  .fontStyle,
-                                            ),
-                                            color: _model.dailyRefreshHour == 18
-                                                ? const Color(0xFF0000FF)
-                                                : Colors.black,
-                                            fontSize: 20.0,
-                                            letterSpacing: 0.0,
-                                                  fontWeight: _model.dailyRefreshHour == 18
-                                                      ? FontWeight.w700
-                                                      : FontWeight.normal,
-                                            fontStyle: FlutterFlowTheme.of(context)
-                                                .displayLarge
-                                                .fontStyle,
-                                            decoration: TextDecoration.underline,
-                                            lineHeight: 1.5,
-                                          ),
-                                    ),
-                                  ),
                                 ),
                               ],
                             ),

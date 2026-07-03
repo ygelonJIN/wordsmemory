@@ -18,6 +18,9 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
   bool showEtymology = true;
   bool showDefinition = true;
   bool showExample = true;
+  bool showEnglishDefinition = true;
+  bool showSynonym = true;
+  bool showTense = true;
 
   @override
   void initState(BuildContext context) {
@@ -48,6 +51,9 @@ class RandomLearnPageModel extends FlutterFlowModel<RandomLearnPageWidget> {
           showEtymology = settings.showEtymology;
           showDefinition = settings.showDefinition;
           showExample = settings.showExample;
+          showEnglishDefinition = settings.showEnglishDefinition;
+          showSynonym = settings.showSynonym;
+          showTense = settings.showTense;
         }
         isLoading = false;
       });
