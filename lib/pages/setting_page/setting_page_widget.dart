@@ -370,11 +370,6 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                               ),
                           ],
                         ),
-                        ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          scrollDirection: Axis.vertical,
-                          children: [
                             Align(
                               alignment: AlignmentDirectional(-1.0, 0.0),
                               child: Padding(
@@ -636,8 +631,6 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                 ),
                               ],
                             ),
-                          ],
-                        ),
                         // ===== 词库诊断区域 =====
                         Align(
                           alignment: AlignmentDirectional(-1.0, 0.0),
@@ -704,11 +697,6 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                             ),
                           ),
                         ),
-                        ListView(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          scrollDirection: Axis.vertical,
-                          children: [
                             Align(
                               alignment: AlignmentDirectional(-1.0, 0.0),
                               child: Padding(
@@ -929,8 +917,6 @@ class _SettingPageWidgetState extends State<SettingPageWidget> {
                                 ),
                               ],
                             ),
-                          ],
-                        ),
                       ],
                     ),
                   ),

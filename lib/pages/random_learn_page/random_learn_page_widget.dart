@@ -533,10 +533,8 @@ class _RandomLearnPageWidgetState extends State<RandomLearnPageWidget> {
                       children: [
                         Align(
                           alignment: AlignmentDirectional(-1.0, -1.0),
-                          child: ListView(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            scrollDirection: Axis.vertical,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               if (_model.showEtymology && (_model.cardData?.etymology.isNotEmpty ?? false) && _model.cardData!.etymologySpans.toPlainText().trim().isNotEmpty) ...[
                                 Align(
